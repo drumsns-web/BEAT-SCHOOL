@@ -495,6 +495,19 @@ input[type=range]::-webkit-slider-thumb {
     <div class="level-pills" id="levelPills"></div>
   </div>
 
+  <!-- 入力モード -->
+  <div class="input-mode-row">
+    <span class="input-mode-label">入力</span>
+    <div class="mode-chip active" id="modeTap" onclick="setInputMode('tap')">👆 TAP</div>
+    <div class="mode-chip" id="modeMic" onclick="setInputMode('mic')">🎤 MIC</div>
+    <div class="mic-level-wrap" id="micIndicator">🎤</div>
+  </div>
+  <div id="micThreshRow" class="mic-thresh-row" style="display:none;margin-bottom:8px;background:white;border:1.5px solid var(--border);border-radius:4px;padding:8px 14px;box-shadow:0 1px 4px var(--shadow);">
+    <span>感度</span>
+    <input type="range" id="micThresh" min="1" max="50" value="15" style="flex:1;" oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
+    <span id="micThreshVal">15</span>
+  </div>
+
   <!-- BPM -->
   <div class="bpm-row">
     <span class="bpm-label">BPM</span>
@@ -1198,6 +1211,88 @@ function drawRest(c, type, x, y, col) {
 
 
 // ============================================================
+// INPUT MODE (TAP / MIC)
+// ============================================================
+let inputMode = 'tap'; // 'tap' | 'mic'
+let micStream = null;
+let micAnalyser = null;
+let micAnimFrame = null;
+let micThreshold = 15;   // 0-255スケールでの音量閾値
+let micCooldownUntil = 0; // 連続検知防止のクールダウン(ms)
+const MIC_COOLDOWN_MS = 80; // 最短打音間隔
+
+function setInputMode(mode) {
+  inputMode = mode;
+  document.getElementById('modeTap').classList.toggle('active', mode === 'tap');
+  document.getElementById('modeMic').classList.toggle('active', mode === 'mic');
+  document.getElementById('tapArea').style.opacity = mode === 'mic' ? '0.4' : '1';
+
+  if (mode === 'mic') {
+    document.getElementById('micThreshRow').style.display = 'flex';
+    startMic();
+  } else {
+    document.getElementById('micThreshRow').style.display = 'none';
+    stopMic();
+  }
+}
+
+async function startMic() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const ac = getACtx();
+    const source = ac.createMediaStreamSource(micStream);
+    micAnalyser = ac.createAnalyser();
+    micAnalyser.fftSize = 256;
+    micAnalyser.smoothingTimeConstant = 0.3;
+    source.connect(micAnalyser);
+    document.getElementById('micIndicator').classList.add('active');
+    monitorMic();
+  } catch(e) {
+    alert('マイクのアクセスが許可されていません: ' + e.message);
+    setInputMode('tap');
+  }
+}
+
+function stopMic() {
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (micAnimFrame) { cancelAnimationFrame(micAnimFrame); micAnimFrame = null; }
+  micAnalyser = null;
+  document.getElementById('micIndicator').classList.remove('active');
+  document.getElementById('micIndicator').style.background = '';
+}
+
+function monitorMic() {
+  if (!micAnalyser) return;
+  const buf = new Uint8Array(micAnalyser.frequencyBinCount);
+
+  function tick() {
+    micAnimFrame = requestAnimationFrame(tick);
+    micAnalyser.getByteFrequencyData(buf);
+
+    // 広帯域のピーク音量（スネア・クラップ・声どれでも拾う）
+    let peak = 0;
+    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, buf[i]);
+
+    // インジケーター色更新
+    const pct = peak / 255;
+    const ind = document.getElementById('micIndicator');
+    ind.style.background = pct > micThreshold/255
+      ? `rgba(200,57,10,${Math.min(1, pct * 1.5)})`
+      : '';
+
+    // 打音検知: セッション中のみ判定
+    if (sessionPhase === 'playing') {
+      const now = performance.now();
+      if (peak >= micThreshold && now > micCooldownUntil) {
+        micCooldownUntil = now + MIC_COOLDOWN_MS;
+        onHit(); // タップと同じ判定関数を呼ぶ
+      }
+    }
+  }
+  tick();
+}
+
+// ============================================================
 // GAME LOGIC
 // ============================================================
 function setBpm(v) {
@@ -1336,17 +1431,15 @@ function stopSession() {
   document.getElementById('startBtn').textContent = '▶ スタート';
   document.getElementById('feedbackMain').textContent = '停止しました';
   document.getElementById('feedbackMain').className = 'feedback-main ready';
+  // マイクはモードが変わるまで継続（停止しない）
 }
 
 function onTap(e) {
   e.preventDefault();
   if (sessionPhase !== 'playing') return;
+  if (inputMode === 'mic') return; // micモード中はタップ無効
 
-  // タップ時刻をAudioCtx基準で計算（setTimeout遅延の影響を受けない）
-  const ac = getACtx();
-  const tapRelMs = (ac.currentTime - patternStartAC) * 1000;
-
-  // ビジュアル
+  // タップビジュアル
   const btn = document.getElementById('tapArea');
   btn.classList.add('hit');
   setTimeout(() => btn.classList.remove('hit'), 80);
@@ -1356,21 +1449,41 @@ function onTap(e) {
   btn.appendChild(ripple);
   setTimeout(() => ripple.remove(), 500);
 
+  onHit();
+}
+
+// タップ・マイク共通の判定処理
+function onHit() {
+  if (sessionPhase !== 'playing') return;
+
+  // ★ AudioCtx基準でタップ時刻を記録
+  // patternStartAC より前の打音（1拍目直前の早打ち）も拾えるよう
+  // clampせずそのままの値を使う
+  const ac = getACtx();
+  const tapRelMs = (ac.currentTime - patternStartAC) * 1000;
+
   playSnare();
   tapLog.push(tapRelMs);
 
-  // ★ 即時フィードバック：最近傍の期待ビートとの差
-  const PERFECT_MS = 80, GOOD_MS = 160;
+  // ★ 判定ウィンドウ
+  // 前方向(early)は広め(-120ms)、後方向(late)は標準(+160ms)
+  // 1拍目はpatternStartACのわずか前から叩き始めることが多いため
+  const PERFECT_EARLY = 80,  PERFECT_LATE = 80;
+  const GOOD_EARLY    = 150, GOOD_LATE    = 160;
+
   let bestDiff = 9999, bestB = null;
   expectedBeats.forEach(b => {
     const d = Math.abs(b.timeMs - tapRelMs);
     if (d < bestDiff) { bestDiff = d; bestB = b; }
   });
-  if (bestDiff < PERFECT_MS) {
+
+  if (!bestB) return;
+  const diff = tapRelMs - bestB.timeMs; // 正=遅い 負=早い
+
+  if (diff >= -PERFECT_EARLY && diff <= PERFECT_LATE) {
     showFeedback('PERFECT!', 'perfect', '');
-  } else if (bestDiff < GOOD_MS) {
-    const sign = bestB && tapRelMs < bestB.timeMs ? 'EARLY' : 'LATE';
-    showFeedback(sign, sign === 'EARLY' ? 'early' : 'late', '');
+  } else if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
+    showFeedback(diff < 0 ? 'EARLY' : 'LATE', diff < 0 ? 'early' : 'late', '');
   } else {
     showFeedback('MISS', 'miss', '');
   }
@@ -1381,26 +1494,30 @@ function evalSession() {
   document.getElementById('cursorLine').style.display = 'none';
   document.getElementById('startBtn').textContent = '▶ スタート';
 
-  const PERFECT_MS = 80, GOOD_MS = 160;
+  // 前方向(early)を広めに判定（1拍目の打ち始めが早い問題に対応）
+  const PERFECT_EARLY = 80,  PERFECT_LATE = 80;
+  const GOOD_EARLY    = 150, GOOD_LATE    = 160;
   const pattern = getPattern();
   const usedTaps = new Set();
   const results = new Array(pattern.length).fill('m');
 
-  // ★ tapLog はすでにpatternStartPNからの経過ms。expectedBeats.timeMsと直接比較OK
   expectedBeats.forEach(b => {
     let best = null, bestDiff = 9999;
     tapLog.forEach((t, i) => {
       if (usedTaps.has(i)) return;
-      const diff = t - b.timeMs;
-      if (Math.abs(diff) < Math.abs(bestDiff)) { best = i; bestDiff = diff; }
+      const diff = t - b.timeMs; // 正=遅い 負=早い
+      // 判定ウィンドウ内かチェック
+      if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
+        if (Math.abs(diff) < Math.abs(bestDiff)) { best = i; bestDiff = diff; }
+      }
     });
-    if (best !== null && Math.abs(bestDiff) < GOOD_MS) {
+    if (best !== null) {
       usedTaps.add(best);
-      if (Math.abs(bestDiff) < PERFECT_MS) results[b.idx] = 'p';
-      else if (bestDiff < 0) results[b.idx] = 'e'; // early
-      else results[b.idx] = 'l'; // late
+      const diff = tapLog[best] - b.timeMs;
+      if (diff >= -PERFECT_EARLY && diff <= PERFECT_LATE) results[b.idx] = 'p';
+      else if (diff < 0) results[b.idx] = 'e';
+      else results[b.idx] = 'l';
     }
-    // else remains 'm'
   });
 
   patternResults = results;
