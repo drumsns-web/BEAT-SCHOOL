@@ -587,41 +587,41 @@ const LEVELS = [
 ];
 
 // Note durations in beats
-const NOTE_DUR    = { q:1, h:2, w:4, 'q.':1.5, e:0.5, 'e.':0.75, er:0.5, s:0.25, sr:0.25, t:1/3 };
+const NOTE_DUR    = { q:1, h:2, w:4, r:1, 'q.':1.5, e:0.5, 'e.':0.75, er:0.5, s:0.25, sr:0.25, t:1/3 };
 const NOTE_IS_REST = { er:true, sr:true, r:true };
 
 // ── ランダムパターン生成 ──────────────────────────────────────
 // 拍数を満たすまで「使えるセル」からランダムに選んで並べる
 function generatePattern(levelIdx) {
-  const lv = LEVELS[levelIdx];
-  const total = lv.timeSig; // 何拍分作るか
-
-  // レベルごとに使える「セル（1拍単位のブロック）」を定義
-  // 各セルは {notes:[...], beats:N} の形
+  const lv    = LEVELS[levelIdx];
+  const total = lv.timeSig;
   const cells = makeCells(levelIdx);
 
-  // 拍数ぴったりになるまでランダムに選んで積む
-  // 最大100試行して見つからなければ安全パターンにフォールバック
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const result = [];
-    let remaining = total;
-    let ok = true;
+  // セルのbeatsをNOTE_DURから計算（定義ミスを防ぐ）
+  cells.forEach(c => {
+    c.beats = c.notes.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
+  });
 
-    while (remaining > 0.001) {
-      const usable = cells.filter(c => c.beats <= remaining + 0.001);
+  for (let attempt = 0; attempt < 400; attempt++) {
+    const result    = [];
+    let remaining   = total;
+    let ok          = true;
+
+    while (remaining > 0.0001) {
+      const usable = cells.filter(c => c.beats <= remaining + 0.0001);
       if (!usable.length) { ok = false; break; }
-      // 使える中からランダム選択（小さいセルを少し重み付け）
       const pick = usable[Math.floor(Math.random() * usable.length)];
       result.push(...pick.notes);
-      remaining -= pick.beats;
+      remaining = +(remaining - pick.beats).toFixed(6);
     }
-    if (ok && Math.abs(remaining) < 0.01) {
-      // 全音符だけにならないように（最低1つ実音が必要）
+
+    if (ok && remaining < 0.001) {
+      // 最低1つ実音が必要
       if (result.some(n => !NOTE_IS_REST[n.t] && n.t !== 'r')) return result;
     }
   }
-  // フォールバック: 全部四分音符
-  return Array(total).fill(null).map(() => ({t:'q'}));
+  // フォールバック
+  return Array.from({length: total}, () => ({t:'q'}));
 }
 
 function makeCells(levelIdx) {
@@ -630,144 +630,143 @@ function makeCells(levelIdx) {
   const base = [];
 
   if (id === 1) {
-    // 四分音符・四分休符のみ
+    // 四分音符を多めに、休符は少なめ
     return [
-      { notes:[{t:'q'}],          beats:1 },
-      { notes:[{t:'q'}],          beats:1 }, // 音符を多めに
-      { notes:[{t:'q'}],          beats:1 },
-      { notes:[{t:'r'}],          beats:1 }, // 四分休符
+      { notes:[{t:'q'}] }, { notes:[{t:'q'}] }, { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] }, { notes:[{t:'q'}] }, // 音符を多く
+      { notes:[{t:'r'}] }, // 四分休符（少なめ）
     ];
   }
 
   if (id === 2) {
     return [
-      { notes:[{t:'q'}],          beats:1 },
-      { notes:[{t:'q'}],          beats:1 },
-      { notes:[{t:'h'}],          beats:2 },
-      { notes:[{t:'h'}],          beats:2 },
-      { notes:[{t:'r'}],          beats:1 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'h'}] },
+      { notes:[{t:'h'}] },
+      { notes:[{t:'r'}] },
     ];
   }
 
   if (id === 3) {
     // 3/4拍子: 3拍
     return [
-      { notes:[{t:'q'}],             beats:1 },
-      { notes:[{t:'q'}],             beats:1 },
-      { notes:[{t:'e'},{t:'e'}],     beats:1 }, // 八分×2=1拍
-      { notes:[{t:'e'},{t:'e'}],     beats:1 },
-      { notes:[{t:'h'}],             beats:2 },
-      { notes:[{t:'r'}],             beats:1 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] }, // 八分×2=1拍
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'h'}] },
+      { notes:[{t:'r'}] },
     ];
   }
 
   if (id === 4) {
     return [
-      { notes:[{t:'q'}],                    beats:1 },
-      { notes:[{t:'q'}],                    beats:1 },
-      { notes:[{t:'e'},{t:'e'}],            beats:1 },
-      { notes:[{t:'e'},{t:'e'}],            beats:1 },
-      { notes:[{t:'er'},{t:'e'}],           beats:1 }, // 八分休+八分
-      { notes:[{t:'e'},{t:'er'}],           beats:1 }, // 八分+八分休
-      { notes:[{t:'r'}],                    beats:1 },
-      { notes:[{t:'h'}],                    beats:2 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'er'},{t:'e'}] }, // 八分休+八分
+      { notes:[{t:'e'},{t:'er'}] }, // 八分+八分休
+      { notes:[{t:'r'}] },
+      { notes:[{t:'h'}] },
     ];
   }
 
   if (id === 5) {
     return [
-      { notes:[{t:'q'}],                    beats:1 },
-      { notes:[{t:'q'}],                    beats:1 },
-      { notes:[{t:'e'},{t:'e'}],            beats:1 },
-      { notes:[{t:'q.'}],                   beats:1.5 },
-      { notes:[{t:'q.'}],                   beats:1.5 },
-      { notes:[{t:'e'}],                    beats:0.5 },
-      { notes:[{t:'er'},{t:'e'}],           beats:1 },
-      { notes:[{t:'h'}],                    beats:2 },
-      { notes:[{t:'r'}],                    beats:1 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'q.'}] },
+      { notes:[{t:'q.'}] },
+      { notes:[{t:'e'}] },
+      { notes:[{t:'er'},{t:'e'}] },
+      { notes:[{t:'h'}] },
+      { notes:[{t:'r'}] },
     ];
   }
 
   if (id === 6) {
     return [
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 }, // 十六分×4=1拍
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'e'}],               beats:1 }, // 十六+十六+八=1拍
-      { notes:[{t:'e'},{t:'s'},{t:'s'}],               beats:1 },
-      { notes:[{t:'r'}],                               beats:1 },
-      { notes:[{t:'h'}],                               beats:2 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] }, // 十六分×4=1拍
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'e'}] }, // 十六+十六+八=1拍
+      { notes:[{t:'e'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'r'}] },
+      { notes:[{t:'h'}] },
     ];
   }
 
   if (id === 7) {
     return [
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
-      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}],      beats:1 }, // 十六休+十六×3
-      { notes:[{t:'s'},{t:'sr'},{t:'s'},{t:'s'}],      beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'sr'},{t:'s'}],      beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'sr'}],      beats:1 },
-      { notes:[{t:'sr'},{t:'s'},{t:'e'}],              beats:1 },
-      { notes:[{t:'e'},{t:'sr'},{t:'s'}],              beats:1 },
-      { notes:[{t:'er'},{t:'e'}],                      beats:1 },
-      { notes:[{t:'r'}],                               beats:1 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] }, // 十六休+十六×3
+      { notes:[{t:'s'},{t:'sr'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'sr'},{t:'s'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'sr'}] },
+      { notes:[{t:'sr'},{t:'s'},{t:'e'}] },
+      { notes:[{t:'e'},{t:'sr'},{t:'s'}] },
+      { notes:[{t:'er'},{t:'e'}] },
+      { notes:[{t:'r'}] },
     ];
   }
 
   if (id === 8) {
     return [
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 }, // 八分三連=1拍
-      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
-      { notes:[{t:'r'}],                               beats:1 },
-      { notes:[{t:'h'}],                               beats:2 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}] }, // 八分三連=1拍
+      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
+      { notes:[{t:'r'}] },
+      { notes:[{t:'h'}] },
     ];
   }
 
   if (id === 9) {
     return [
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
-      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}],      beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'e'}],               beats:1 },
-      { notes:[{t:'e'},{t:'s'},{t:'s'}],               beats:1 },
-      { notes:[{t:'er'},{t:'e'}],                      beats:1 },
-      { notes:[{t:'q.'}],                              beats:1.5 },
-      { notes:[{t:'e'}],                               beats:0.5 },
-      { notes:[{t:'r'}],                               beats:1 },
-      { notes:[{t:'h'}],                               beats:2 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
+      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'e'}] },
+      { notes:[{t:'e'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'er'},{t:'e'}] },
+      { notes:[{t:'q.'}] },
+      { notes:[{t:'e'}] },
+      { notes:[{t:'r'}] },
+      { notes:[{t:'h'}] },
     ];
   }
 
   if (id === 10) {
     // 5拍子: より複雑な組み合わせ
     return [
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'q'}],                               beats:1 },
-      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
-      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}],      beats:1 },
-      { notes:[{t:'s'},{t:'s'},{t:'e'}],               beats:1 },
-      { notes:[{t:'e'},{t:'s'},{t:'s'}],               beats:1 },
-      { notes:[{t:'er'},{t:'e'}],                      beats:1 },
-      { notes:[{t:'q.'}],                              beats:1.5 },
-      { notes:[{t:'e'}],                               beats:0.5 },
-      { notes:[{t:'r'}],                               beats:1 },
-      { notes:[{t:'h'}],                               beats:2 },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'q'}] },
+      { notes:[{t:'e'},{t:'e'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
+      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'s'},{t:'s'},{t:'e'}] },
+      { notes:[{t:'e'},{t:'s'},{t:'s'}] },
+      { notes:[{t:'er'},{t:'e'}] },
+      { notes:[{t:'q.'}] },
+      { notes:[{t:'e'}] },
+      { notes:[{t:'r'}] },
+      { notes:[{t:'h'}] },
     ];
   }
 
-  return [{ notes:[{t:'q'}], beats:1 }];
+  return [{ notes:[{t:'q'}] }];
 }
 
 // パターンをキー文字列に変換（苦手保存・重複排除用）
@@ -868,11 +867,6 @@ function playClick(time, accent=false) {
 // CANVAS RENDERING
 // ============================================================
 const NOTE_COLORS = { p:'#1a6b3a', g:'#c8920a', e:'#0a4a8a', l:'#0a4a8a', m:'#c8390a', _:'#1a1408' };
-
-function getPattern() {
-  const lv = LEVELS[currentLevel];
-  return lv.patterns[currentPatternIdx % lv.patterns.length];
-}
 
 function buildBeats(pattern) {
   const beats = [];
