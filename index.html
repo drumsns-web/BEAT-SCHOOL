@@ -496,16 +496,34 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 
   <!-- 入力モード -->
-  <div class="input-mode-row">
-    <span class="input-mode-label">入力</span>
-    <div class="mode-chip active" id="modeTap" onclick="setInputMode('tap')">👆 TAP</div>
-    <div class="mode-chip" id="modeMic" onclick="setInputMode('mic')">🎤 MIC</div>
-    <div class="mic-level-wrap" id="micIndicator">🎤</div>
-  </div>
-  <div id="micThreshRow" class="mic-thresh-row" style="display:none;margin-bottom:8px;background:white;border:1.5px solid var(--border);border-radius:4px;padding:8px 14px;box-shadow:0 1px 4px var(--shadow);">
-    <span>感度</span>
-    <input type="range" id="micThresh" min="5" max="80" value="20" style="flex:1;" oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
-    <span id="micThreshVal">20</span>
+  <div class="mic-section">
+    <div class="mic-section-title">— 入力モード —</div>
+    <div class="input-mode-row">
+      <div class="mode-btn active" id="modeTap" onclick="setInputMode('tap')">
+        <span class="mode-icon">👆</span>
+        <span class="mode-label">TAP</span>
+        <span class="mode-desc">画面をタップ</span>
+      </div>
+      <div class="mode-btn" id="modeMic" onclick="setInputMode('mic')">
+        <span class="mode-icon">🎤</span>
+        <span class="mode-label">MIC</span>
+        <span class="mode-desc">打音・声で入力</span>
+      </div>
+    </div>
+    <!-- マイクレベルメーター（MIC時のみ表示） -->
+    <div id="micMeterRow" class="mic-meter-row" style="display:none;">
+      <span class="mic-meter-label">音量</span>
+      <div class="mic-meter-bar">
+        <div class="mic-meter-fill" id="micMeterFill"></div>
+      </div>
+      <span class="mic-status" id="micStatus">OFF</span>
+    </div>
+    <!-- 感度スライダー（MIC時のみ表示） -->
+    <div id="micThreshRow" class="mic-thresh-row" style="display:none;">
+      <span>感度</span>
+      <input type="range" id="micThresh" min="5" max="120" value="60" style="flex:1;" oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
+      <span id="micThreshVal">60</span>
+    </div>
   </div>
 
   <!-- BPM -->
@@ -1217,22 +1235,27 @@ let inputMode = 'tap'; // 'tap' | 'mic'
 let micStream = null;
 let micAnalyser = null;
 let micAnimFrame = null;
-let micThreshold = 20;   // 前フレームからのdelta閾値（アタック検知）
+let micThreshold = 60;   // delta閾値（高いほど感度が低い・誤検知しにくい）
 let micCooldownUntil = 0; // 連続検知防止のクールダウン(ms)
-const MIC_COOLDOWN_MS = 120; // 最短打音間隔（短すぎると残響を拾う）
+const MIC_COOLDOWN_MS = 150; // 最短打音間隔（残響・二重検知を防ぐ）
 
 function setInputMode(mode) {
   inputMode = mode;
   document.getElementById('modeTap').classList.toggle('active', mode === 'tap');
   document.getElementById('modeMic').classList.toggle('active', mode === 'mic');
-  document.getElementById('tapArea').style.opacity = mode === 'mic' ? '0.4' : '1';
+  document.getElementById('tapArea').style.opacity = mode === 'mic' ? '0.35' : '1';
+  document.getElementById('tapArea').style.pointerEvents = mode === 'mic' ? 'none' : '';
+
+  const showMic = mode === 'mic';
+  document.getElementById('micThreshRow').style.display = showMic ? 'flex' : 'none';
+  document.getElementById('micMeterRow').style.display  = showMic ? 'flex' : 'none';
 
   if (mode === 'mic') {
-    document.getElementById('micThreshRow').style.display = 'flex';
     startMic();
   } else {
-    document.getElementById('micThreshRow').style.display = 'none';
     stopMic();
+    document.getElementById('micStatus').textContent = 'OFF';
+    document.getElementById('micMeterFill').style.width = '0%';
   }
 }
 
@@ -1242,9 +1265,9 @@ async function startMic() {
     const ac = getACtx();
     const source = ac.createMediaStreamSource(micStream);
     micAnalyser = ac.createAnalyser();
-    micAnalyser.fftSize = 256;
-    // smoothingを小さくしてアタック（立ち上がり）を鋭く検知する
-    micAnalyser.smoothingTimeConstant = 0.1;
+    micAnalyser.fftSize = 512;
+    // smoothing=0で瞬間値をそのまま取得（アタック検知に最適）
+    micAnalyser.smoothingTimeConstant = 0.0;
     source.connect(micAnalyser);
     document.getElementById('micIndicator').classList.add('active');
     monitorMic();
@@ -1289,15 +1312,20 @@ function monitorMic() {
     const delta = peak - prevPeak;
     prevPeak = peak;
 
-    // インジケーター: deltaの大きさで光る
-    const ind = document.getElementById('micIndicator');
+    // メーターバー更新
     const hitDetected = delta >= micThreshold && peak > bgLevel + 10;
-    ind.style.background = hitDetected
-      ? 'rgba(200,57,10,0.8)'
-      : peak > bgLevel + 5
-        ? `rgba(200,146,10,${Math.min(0.5, (peak - bgLevel) / 100)})`
-        : '';
-    ind.classList.toggle('active', peak > bgLevel + 5);
+    const meterFill = document.getElementById('micMeterFill');
+    const micStat   = document.getElementById('micStatus');
+    if (meterFill) {
+      // deltaを可視化（0-255のdeltaをパーセントに）
+      const meterPct = Math.min(100, Math.max(0, delta / 150 * 100));
+      meterFill.style.width = meterPct + '%';
+      meterFill.classList.toggle('hit', hitDetected);
+    }
+    if (micStat) {
+      micStat.textContent = hitDetected ? 'HIT!' : (delta > micThreshold * 0.4 ? '...' : 'ON');
+      micStat.style.color = hitDetected ? 'var(--accent)' : 'var(--accent2)';
+    }
 
     // ★ 打音判定:
     //   1. 前フレームからの音量上昇(delta)が閾値以上
