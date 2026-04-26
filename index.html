@@ -1021,57 +1021,52 @@ function startSession() {
   tapLog = [];
   document.getElementById('dotsRow').innerHTML = '';
   document.getElementById('resultCard').style.display = 'none';
-  document.getElementById('startBtn').textContent = '⏹ 停止';
+  document.getElementById('startBtn').textContent = '&#9209; 停止';
   sessionPhase = 'countdown';
 
   const ac = getACtx();
   const secPerBeat = 60 / bpm;
-  const lv = LEVELS[currentLevel];
 
-  // ★ インカウント: 今すぐ3拍のクリックをAudioContextでスケジュール
-  // カウント音: ac.currentTime + 0.1 から1拍ずつ
-  const countStartAC = ac.currentTime + 0.1;
-  const countBeats = 3; // 3→2→1 の3拍
-  for (let i = 0; i < countBeats; i++) {
-    playClick(countStartAC + i * secPerBeat, i === 0); // 1拍目はアクセント
-  }
-
-  // ★ パターンはカウント終了直後から開始
-  patternStartAC = countStartAC + countBeats * secPerBeat;
-
-  // ★ patternStartPN: AudioContextとperformance.nowの対応関係
-  // ac.currentTime と performance.now() は別々のクロックだが、
-  // 取得タイミングを近くして近似値を求める
+  // ac と performance.now を同時取得
   const acNow = ac.currentTime;
   const pnNow = performance.now();
-  // acNow から patternStartAC まで何ms後か
+
+  // インカウント: 1・2・3・4 の4拍
+  const countBeats = 4;
+  const countStartAC = acNow + 0.1;
+  for (let i = 0; i < countBeats; i++) {
+    playClick(countStartAC + i * secPerBeat, i === 0);
+  }
+
+  // パターン開始 = 4拍目の次の拍
+  patternStartAC = countStartAC + countBeats * secPerBeat;
   patternStartPN = pnNow + (patternStartAC - acNow) * 1000;
 
-  // UIカウントダウン表示（音と同期させる）
-  // countStartAC の ms後から表示更新
+  // UI数字表示（音と同タイミング）
   const countStartDelay = (countStartAC - acNow) * 1000;
   for (let i = 0; i < countBeats; i++) {
-    const displayNum = countBeats - i; // 3, 2, 1
     const delayMs = countStartDelay + i * secPerBeat * 1000;
     setTimeout(() => {
       if (sessionPhase !== 'countdown') return;
-      document.getElementById('feedbackMain').textContent = displayNum;
+      document.getElementById('feedbackMain').textContent = i + 1;
       document.getElementById('feedbackMain').className = 'feedback-main ready';
+      document.getElementById('feedbackSub').textContent = 'インカウント';
     }, delayMs);
   }
 
-  // GO! 表示 → パターン開始と同時
-  const goDelay = countStartDelay + countBeats * secPerBeat * 1000;
+  // 4拍目終わり = パターン開始
+  const patternStartDelay = countStartDelay + countBeats * secPerBeat * 1000;
   setTimeout(() => {
     if (sessionPhase !== 'countdown') return;
-    document.getElementById('feedbackMain').textContent = 'GO!';
-    document.getElementById('feedbackMain').className = 'feedback-main perfect';
     beginPlay();
-  }, goDelay);
+  }, patternStartDelay);
 }
 
 function beginPlay() {
   sessionPhase = 'playing';
+  document.getElementById('feedbackMain').textContent = 'TAP!';
+  document.getElementById('feedbackMain').className = 'feedback-main ready';
+  document.getElementById('feedbackSub').textContent = '';
   expectedBeats = buildExpectedBeats();
   const pattern = getPattern();
   const lv = LEVELS[currentLevel];
