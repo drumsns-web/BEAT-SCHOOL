@@ -986,20 +986,18 @@ function setBpm(v) {
   bpm = v;
   document.getElementById('bpmNum').textContent = v;
   document.getElementById('bpmChip').textContent = `♩= ${v}`;
-  LEVELS[currentLevel].bpm = v; // override for current level
 }
 
 function buildExpectedBeats() {
   const pattern = getPattern();
-  const lv = LEVELS[currentLevel];
-  const secPerBeat = 60/bpm;
-  let timeMs = 0;
+  const secPerBeat = 60 / bpm;
+  let timeSec = 0;
   const beats = [];
   pattern.forEach((note, i) => {
-    const isRest = !!NOTE_IS_REST[note.t] || note.t==='r';
+    const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
     const dur = NOTE_DUR[note.t] || 1;
-    if (!isRest) beats.push({ timeMs, idx:i, dur });
-    timeMs += dur * secPerBeat * 1000;
+    if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000, idx: i, dur });
+    timeSec += dur * secPerBeat;
   });
   return beats;
 }
@@ -1007,291 +1005,279 @@ function buildExpectedBeats() {
 let sessionPhase = 'idle';
 let countdownTimer = null;
 
+// ★ 核心：AudioContextの時刻を基準にすべてを管理
+// patternStartAC = パターン1拍目がAudioContext上で鳴る時刻 (ac.currentTime単位)
+// patternStartPN = 同じ瞬間のperformance.now() (ms単位) ← タップ判定に使用
+let patternStartAC = 0;
+let patternStartPN = 0;
+
 function startSession() {
-  if (sessionPhase === 'playing') { stopSession(); return; }
+  if (sessionPhase === 'playing' || sessionPhase === 'countdown') {
+    stopSession();
+    return;
+  }
   getACtx();
   patternResults = [];
   tapLog = [];
-  dotsRow.innerHTML = '';
+  document.getElementById('dotsRow').innerHTML = '';
   document.getElementById('resultCard').style.display = 'none';
-  document.getElementById('feedbackMain').className='feedback-main ready';
-  document.getElementById('feedbackMain').textContent='3';
-  document.getElementById('startBtn').textContent='⏹ 停止';
-  sessionPhase='countdown';
+  document.getElementById('startBtn').textContent = '⏹ 停止';
+  sessionPhase = 'countdown';
 
-  let cnt=3;
-  const tick=()=>{
-    document.getElementById('feedbackMain').textContent=cnt>0?cnt:'GO!';
-    if(cnt===0){
-      setTimeout(beginPlay, 400);
-    } else {
-      playClick(null, cnt===3);
-      cnt--;
-      countdownTimer=setTimeout(tick,600);
-    }
-  };
-  tick();
+  const ac = getACtx();
+  const secPerBeat = 60 / bpm;
+  const lv = LEVELS[currentLevel];
+
+  // ★ インカウント: 今すぐ3拍のクリックをAudioContextでスケジュール
+  // カウント音: ac.currentTime + 0.1 から1拍ずつ
+  const countStartAC = ac.currentTime + 0.1;
+  const countBeats = 3; // 3→2→1 の3拍
+  for (let i = 0; i < countBeats; i++) {
+    playClick(countStartAC + i * secPerBeat, i === 0); // 1拍目はアクセント
+  }
+
+  // ★ パターンはカウント終了直後から開始
+  patternStartAC = countStartAC + countBeats * secPerBeat;
+
+  // ★ patternStartPN: AudioContextとperformance.nowの対応関係
+  // ac.currentTime と performance.now() は別々のクロックだが、
+  // 取得タイミングを近くして近似値を求める
+  const acNow = ac.currentTime;
+  const pnNow = performance.now();
+  // acNow から patternStartAC まで何ms後か
+  patternStartPN = pnNow + (patternStartAC - acNow) * 1000;
+
+  // UIカウントダウン表示（音と同期させる）
+  // countStartAC の ms後から表示更新
+  const countStartDelay = (countStartAC - acNow) * 1000;
+  for (let i = 0; i < countBeats; i++) {
+    const displayNum = countBeats - i; // 3, 2, 1
+    const delayMs = countStartDelay + i * secPerBeat * 1000;
+    setTimeout(() => {
+      if (sessionPhase !== 'countdown') return;
+      document.getElementById('feedbackMain').textContent = displayNum;
+      document.getElementById('feedbackMain').className = 'feedback-main ready';
+    }, delayMs);
+  }
+
+  // GO! 表示 → パターン開始と同時
+  const goDelay = countStartDelay + countBeats * secPerBeat * 1000;
+  setTimeout(() => {
+    if (sessionPhase !== 'countdown') return;
+    document.getElementById('feedbackMain').textContent = 'GO!';
+    document.getElementById('feedbackMain').className = 'feedback-main perfect';
+    beginPlay();
+  }, goDelay);
 }
 
 function beginPlay() {
-  sessionPhase='playing';
-  document.getElementById('feedbackMain').textContent='TAP!';
-  document.getElementById('feedbackMain').className='feedback-main ready';
+  sessionPhase = 'playing';
   expectedBeats = buildExpectedBeats();
   const pattern = getPattern();
   const lv = LEVELS[currentLevel];
-
-  // Schedule audio playback of pattern + metronome
   const ac = getACtx();
-  const startT = ac.currentTime + 0.05;
-  const secPerBeat = 60/bpm;
+  const secPerBeat = 60 / bpm;
+  const totalDurBeats = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
+  const totalMs = totalDurBeats * secPerBeat * 1000;
 
-  // Metronome clicks
-  const totalBeats = pattern.reduce((s,n)=>s+(NOTE_DUR[n.t]||1),0);
-  for (let b=0; b<Math.ceil(totalBeats); b++) {
-    playClick(startT + b*secPerBeat, b%lv.timeSig===0);
+  // ★ メトロノームをパターン開始と同じタイムラインでスケジュール
+  for (let b = 0; b < Math.ceil(totalDurBeats); b++) {
+    playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
   }
 
-  // Notes (for reference when in "listen" mode — here we DON'T play for challenge)
-  gameStartTime = startT * 1000;
-  const startPerf = performance.now() - (ac.currentTime - startT)*1000;
-
-  // Cursor animation
+  // ★ バーアニメーション：patternStartPN を基準に requestAnimationFrame で動かす
   const cursorEl = document.getElementById('cursorLine');
-  const sheetW = document.getElementById('sheetWrap').clientWidth - 20;
-  cursorEl.style.display='block';
-  const totalMs = totalBeats * secPerBeat * 1000;
-  let animStart = null;
+  const sheetWrap = document.getElementById('sheetWrap');
+  const sheetW = sheetWrap.clientWidth - 20;
+  const noteAreaStart = 52;
+  const noteAreaEnd = sheetW - 18;
+  cursorEl.style.display = 'block';
+  cursorEl.style.left = noteAreaStart + 10 + 'px';
+
   function animCursor(ts) {
-    if (!animStart) animStart = ts;
-    const elapsed = ts - animStart;
-    const pct = Math.min(elapsed/totalMs, 1);
-    const noteAreaStart = 52;
-    const noteAreaEnd = sheetW - 18;
-    const cursorX = noteAreaStart + pct*(noteAreaEnd-noteAreaStart);
-    cursorEl.style.left = (cursorX+10) + 'px';
-    if (elapsed < totalMs && sessionPhase==='playing') requestAnimationFrame(animCursor);
-    else if (elapsed >= totalMs) {
-      cursorEl.style.display='none';
-      setTimeout(evalSession, 300);
+    if (sessionPhase !== 'playing') return;
+    const elapsedMs = performance.now() - patternStartPN;
+    const pct = Math.min(elapsedMs / totalMs, 1);
+    const cursorX = noteAreaStart + pct * (noteAreaEnd - noteAreaStart);
+    cursorEl.style.left = (cursorX + 10) + 'px';
+
+    if (elapsedMs < totalMs) {
+      requestAnimationFrame(animCursor);
+    } else {
+      cursorEl.style.display = 'none';
+      setTimeout(evalSession, 200);
     }
   }
   requestAnimationFrame(animCursor);
 
-  // Highlight notes as they pass
-  function highlightNote(beatIdx) {
-    if (beatIdx >= expectedBeats.length) return;
-    const b = expectedBeats[beatIdx];
-    const noteEl = window._notePositions?.[b.idx];
-    // flash
-    const delay = b.timeMs + startT*1000 - performance.now();
-    setTimeout(()=>{ if(sessionPhase==='playing') flashCurrentNote(b.idx); }, Math.max(0, delay));
-    if (beatIdx+1 < expectedBeats.length) {
-      const next = expectedBeats[beatIdx+1];
-      setTimeout(()=>highlightNote(beatIdx+1), Math.max(1, next.timeMs - b.timeMs));
-    }
-  }
-  if (expectedBeats.length>0) {
-    setTimeout(()=>highlightNote(0), Math.max(0, expectedBeats[0].timeMs));
-  }
-
-  // End session
-  gameTimer = setTimeout(()=>{
-    if(sessionPhase==='playing') evalSession();
-  }, totalMs + 500);
-}
-
-function flashCurrentNote(noteIdx) {
-  // brief highlight on canvas around note
-  const pos = window._notePositions?.[noteIdx];
-  if (!pos) return;
+  // フォールバック終了タイマー
+  gameTimer = setTimeout(() => {
+    if (sessionPhase === 'playing') evalSession();
+  }, totalMs + 800);
 }
 
 function stopSession() {
-  sessionPhase='idle';
+  sessionPhase = 'idle';
   clearTimeout(countdownTimer);
   clearTimeout(gameTimer);
-  clearTimeout(listenTimer);
-  document.getElementById('cursorLine').style.display='none';
-  document.getElementById('startBtn').textContent='▶ スタート';
-  document.getElementById('feedbackMain').textContent='停止しました';
-  document.getElementById('feedbackMain').className='feedback-main ready';
+  document.getElementById('cursorLine').style.display = 'none';
+  document.getElementById('startBtn').textContent = '▶ スタート';
+  document.getElementById('feedbackMain').textContent = '停止しました';
+  document.getElementById('feedbackMain').className = 'feedback-main ready';
 }
 
 function onTap(e) {
   e.preventDefault();
   if (sessionPhase !== 'playing') return;
-  const now = performance.now();
 
-  // Ripple
+  // ★ タップ時刻をpatternStartPNからの経過ms で記録
+  const tapRelMs = performance.now() - patternStartPN;
+
+  // ビジュアル
   const btn = document.getElementById('tapArea');
   btn.classList.add('hit');
-  setTimeout(()=>btn.classList.remove('hit'),80);
+  setTimeout(() => btn.classList.remove('hit'), 80);
   const ripple = document.createElement('div');
   ripple.className = 'tap-ripple';
-  ripple.style.width = ripple.style.height = '60px';
-  ripple.style.left = '50%'; ripple.style.top='50%';
-  ripple.style.marginLeft = ripple.style.marginTop = '-30px';
+  ripple.style.cssText = 'width:80px;height:80px;left:50%;top:50%;margin-left:-40px;margin-top:-40px;position:absolute;';
   btn.appendChild(ripple);
-  setTimeout(()=>ripple.remove(), 500);
+  setTimeout(() => ripple.remove(), 500);
 
   playSnare();
+  tapLog.push(tapRelMs);
 
-  const ac = getACtx();
-  const tapTimeMs = (ac.currentTime - gameStartTime/1000 + (performance.now()-now)/1000) * 1000;
-  // Actually use simple performance.now relative to session start
-  const tapRelMs = now - (gameStartTime - ac.currentTime*1000 + performance.now() - now);
-
-  // Find closest expected beat
+  // ★ 即時フィードバック：最近傍の期待ビートとの差
   const PERFECT_MS = 80, GOOD_MS = 160;
-  let best = null, bestDiff = 9999;
+  let bestDiff = 9999, bestB = null;
   expectedBeats.forEach(b => {
-    const diff = Math.abs(b.timeMs - tapLog.reduce((acc,t)=>acc, b.timeMs)); // placeholder
-    // Use tap time relative to audio start
+    const d = Math.abs(b.timeMs - tapRelMs);
+    if (d < bestDiff) { bestDiff = d; bestB = b; }
   });
-
-  tapLog.push(now);
-
-  // Quick visual feedback
-  const relTap = now;
-  const audioStart = gameStartTime;
-  // We'll eval at end
-  showFeedback('TAP', 'good', '');
+  if (bestDiff < PERFECT_MS) {
+    showFeedback('PERFECT!', 'perfect', '');
+  } else if (bestDiff < GOOD_MS) {
+    const sign = bestB && tapRelMs < bestB.timeMs ? 'EARLY' : 'LATE';
+    showFeedback(sign, sign === 'EARLY' ? 'early' : 'late', '');
+  } else {
+    showFeedback('MISS', 'miss', '');
+  }
 }
 
 function evalSession() {
-  sessionPhase='result';
-  document.getElementById('cursorLine').style.display='none';
-  document.getElementById('startBtn').textContent='▶ スタート';
+  sessionPhase = 'result';
+  document.getElementById('cursorLine').style.display = 'none';
+  document.getElementById('startBtn').textContent = '▶ スタート';
 
-  const ac = getACtx();
-  // audio start in performance.now domain
-  const audioStartPN = gameStartTime - ac.currentTime*1000 + performance.now(); // wrong; use stored
-  // Rebuild: we stored gameStartTime = startT * 1000 (in audioCtx units)
-  // and performance.now() at that moment we need
-
-  // Simpler: match taps to beats by order + timing window
-  const PERFECT_MS = 85, GOOD_MS = 170;
+  const PERFECT_MS = 80, GOOD_MS = 160;
   const pattern = getPattern();
-  const secPerBeat = 60/bpm;
   const usedTaps = new Set();
   const results = new Array(pattern.length).fill('m');
 
-  // Audio start in perf domain approximation (ac.currentTime drifts)
-  // We set gameStartTime = startT * 1000, startT = ac.currentTime + 0.05 at moment of call
-  // We'll use a stored perf time
-  const startPN = window._sessionStartPN || performance.now();
-
-  const tapTimesRel = tapLog.map(t => t - startPN);
-
+  // ★ tapLog はすでにpatternStartPNからの経過ms。expectedBeats.timeMsと直接比較OK
   expectedBeats.forEach(b => {
     let best = null, bestDiff = 9999;
-    tapTimesRel.forEach((t,i) => {
+    tapLog.forEach((t, i) => {
       if (usedTaps.has(i)) return;
       const diff = t - b.timeMs;
-      if (Math.abs(diff) < Math.abs(bestDiff)) { best=i; bestDiff=diff; }
+      if (Math.abs(diff) < Math.abs(bestDiff)) { best = i; bestDiff = diff; }
     });
-    if (best!==null && Math.abs(bestDiff) < GOOD_MS) {
+    if (best !== null && Math.abs(bestDiff) < GOOD_MS) {
       usedTaps.add(best);
-      if (Math.abs(bestDiff) < PERFECT_MS) results[b.idx]='p';
-      else if (bestDiff < 0) results[b.idx]='e'; // early
-      else results[b.idx]='l'; // late
+      if (Math.abs(bestDiff) < PERFECT_MS) results[b.idx] = 'p';
+      else if (bestDiff < 0) results[b.idx] = 'e'; // early
+      else results[b.idx] = 'l'; // late
     }
     // else remains 'm'
   });
-
-  // Extra taps (ghost hits) don't penalize beyond miss
 
   patternResults = results;
   drawStaff();
   renderDots(results);
 
   const total = expectedBeats.length;
-  const p = results.filter(r=>r==='p').length;
-  const g = results.filter(r=>r==='e'||r==='l').length;
-  const m = results.filter(r=>r==='m').length;
-  const acc = total>0 ? Math.round((p*100 + g*50) / (total*100) * 100) : 0;
-  const earned = p*120 + g*60 - m*30;
-  totalScore += Math.max(0,earned);
+  const p = results.filter(r => r === 'p').length;
+  const g = results.filter(r => r === 'e' || r === 'l').length;
+  const m = results.filter(r => r === 'm').length;
+  const acc = total > 0 ? Math.round((p * 100 + g * 50) / (total * 100) * 100) : 0;
+  const earned = p * 120 + g * 60 - m * 30;
+  totalScore += Math.max(0, earned);
 
-  const grade = acc>=95?'S':acc>=80?'A':acc>=65?'B':acc>=50?'C':'D';
-  if (acc>=60) { streak++; xp+=Math.max(0,earned); }
-  else { streak=0; }
+  const grade = acc >= 95 ? 'S' : acc >= 80 ? 'A' : acc >= 65 ? 'B' : acc >= 50 ? 'C' : 'D';
+  if (acc >= 60) { streak++; xp += Math.max(0, earned); }
+  else { streak = 0; }
 
-  // Unlock next level
-  if (acc>=70 && currentLevel+1<LEVELS.length && LEVELS[currentLevel+1].id > unlockedLevel) {
-    unlockedLevel = LEVELS[currentLevel+1].id;
+  if (acc >= 70 && currentLevel + 1 < LEVELS.length && LEVELS[currentLevel + 1].id > unlockedLevel) {
+    unlockedLevel = LEVELS[currentLevel + 1].id;
     renderLevelPills();
   }
 
   updateXP();
   document.getElementById('scoreVal').textContent = totalScore;
   document.getElementById('streakBadge').textContent = streak > 1 ? `🔥${streak}連続` : '';
+  document.getElementById('rP').textContent = p;
+  document.getElementById('rG').textContent = g;
+  document.getElementById('rM').textContent = m;
+  document.getElementById('rAcc').textContent = acc + '%';
+  const gradeEl = document.getElementById('resultGrade');
+  gradeEl.textContent = grade;
+  gradeEl.className = 'result-grade grade-' + grade;
+  document.getElementById('resultCard').style.display = 'block';
 
-  document.getElementById('rP').textContent=p;
-  document.getElementById('rG').textContent=g;
-  document.getElementById('rM').textContent=m;
-  document.getElementById('rAcc').textContent=acc+'%';
-  const gradeEl=document.getElementById('resultGrade');
-  gradeEl.textContent=grade;
-  gradeEl.className='result-grade grade-'+grade;
-  document.getElementById('resultCard').style.display='block';
-
-  const msgs = {S:'完璧！素晴らしい！',A:'Great！良い精度です',B:'Good！もう少し！',C:'Keep going!',D:'また練習しよう'};
-  showFeedback(grade==='S'?'PERFECT!':grade==='A'?'GREAT!':grade==='B'?'GOOD!':'KEEP GOING',
-    grade==='S'||grade==='A'?'perfect':grade==='B'?'good':'miss', msgs[grade]);
+  const msgs = { S: '完璧！素晴らしい！', A: 'Great！良い精度です', B: 'Good！もう少し！', C: 'Keep going!', D: 'また練習しよう' };
+  showFeedback(
+    grade === 'S' ? 'PERFECT!' : grade === 'A' ? 'GREAT!' : grade === 'B' ? 'GOOD!' : 'KEEP GOING',
+    grade === 'S' || grade === 'A' ? 'perfect' : grade === 'B' ? 'good' : 'miss',
+    msgs[grade]
+  );
 }
 
 function showFeedback(main, cls, sub) {
-  const el=document.getElementById('feedbackMain');
-  el.textContent=main;
-  el.className='feedback-main '+(cls||'ready');
-  document.getElementById('feedbackSub').textContent=sub||'';
+  const el = document.getElementById('feedbackMain');
+  el.textContent = main;
+  el.className = 'feedback-main ' + (cls || 'ready');
+  document.getElementById('feedbackSub').textContent = sub || '';
 }
 
 function renderDots(results) {
-  const row=document.getElementById('dotsRow');
-  row.innerHTML=results.map(r=>`<div class="dot ${r||''}"></div>`).join('');
+  const row = document.getElementById('dotsRow');
+  row.innerHTML = results.map(r => `<div class="dot ${r || ''}"></div>`).join('');
 }
 
 // ============================================================
 // LISTEN MODE
 // ============================================================
 function listenPattern() {
-  if (sessionPhase==='playing'||sessionPhase==='countdown') return;
-  getACtx();
-  const pattern=getPattern();
-  const ac=getACtx();
-  const lv=LEVELS[currentLevel];
-  const secPerBeat=60/bpm;
-  const startT=ac.currentTime+0.2;
+  if (sessionPhase === 'playing' || sessionPhase === 'countdown') return;
+  const ac = getACtx();
+  const pattern = getPattern();
+  const lv = LEVELS[currentLevel];
+  const secPerBeat = 60 / bpm;
+  const startT = ac.currentTime + 0.15;
+  const totalDur = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
 
-  // Metronome
-  const totalDur=pattern.reduce((s,n)=>s+(NOTE_DUR[n.t]||1),0);
-  for(let b=0;b<Math.ceil(totalDur);b++) playClick(startT+b*secPerBeat, b%lv.timeSig===0);
-
-  // Notes
-  let timeOff=0;
-  pattern.forEach(note=>{
-    if(!NOTE_IS_REST[note.t]&&note.t!=='r') playSnare(startT+timeOff*secPerBeat);
-    timeOff+=(NOTE_DUR[note.t]||1);
+  for (let b = 0; b < Math.ceil(totalDur); b++) {
+    playClick(startT + b * secPerBeat, b % lv.timeSig === 0);
+  }
+  let timeOff = 0;
+  pattern.forEach(note => {
+    if (!NOTE_IS_REST[note.t] && note.t !== 'r') playSnare(startT + timeOff * secPerBeat);
+    timeOff += (NOTE_DUR[note.t] || 1);
   });
-
-  showFeedback('LISTEN...','ready','メトロノームと音を聴いて覚えよう');
+  showFeedback('LISTEN...', 'ready', 'メトロノームと音を聴いて覚えよう');
 }
 
 // ============================================================
 // PATTERN NAVIGATION
 // ============================================================
 function nextPattern() {
-  const lv=LEVELS[currentLevel];
-  currentPatternIdx=(currentPatternIdx+1)%lv.patterns.length;
-  patternResults=[];
-  tapLog=[];
-  document.getElementById('dotsRow').innerHTML='';
-  document.getElementById('resultCard').style.display='none';
-  document.getElementById('patNumLabel').textContent=`パターン #${currentPatternIdx+1}`;
-  showFeedback('譜面を読んでスタート','ready','');
+  const lv = LEVELS[currentLevel];
+  currentPatternIdx = (currentPatternIdx + 1) % lv.patterns.length;
+  patternResults = [];
+  tapLog = [];
+  document.getElementById('dotsRow').innerHTML = '';
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('patNumLabel').textContent = `パターン #${currentPatternIdx + 1}`;
+  showFeedback('譜面を読んでスタート', 'ready', '');
   drawStaff();
 }
 
@@ -1299,142 +1285,53 @@ function nextPattern() {
 // LEVEL PILLS
 // ============================================================
 function renderLevelPills() {
-  const wrap=document.getElementById('levelPills');
-  wrap.innerHTML='';
-  LEVELS.forEach((lv,i)=>{
-    const locked=lv.id>unlockedLevel;
-    const pill=document.createElement('div');
-    pill.className='level-pill'+(i===currentLevel?' active':'')+(locked?' locked':'');
-    pill.textContent=locked?`🔒${lv.name}`:lv.name;
-    if(!locked) pill.onclick=()=>selectLevel(i);
+  const wrap = document.getElementById('levelPills');
+  wrap.innerHTML = '';
+  LEVELS.forEach((lv, i) => {
+    const locked = lv.id > unlockedLevel;
+    const pill = document.createElement('div');
+    pill.className = 'level-pill' + (i === currentLevel ? ' active' : '') + (locked ? ' locked' : '');
+    pill.textContent = locked ? `🔒${lv.name}` : lv.name;
+    if (!locked) pill.onclick = () => selectLevel(i);
     wrap.appendChild(pill);
   });
 }
 
 function selectLevel(i) {
-  if(LEVELS[i].id>unlockedLevel) return;
-  currentLevel=i;
-  currentPatternIdx=0;
-  patternResults=[]; tapLog=[];
-  const lv=LEVELS[i];
-  bpm=lv.bpm;
-  document.getElementById('bpmSlider').value=bpm;
-  document.getElementById('bpmNum').textContent=bpm;
-  document.getElementById('bpmChip').textContent=`♩= ${bpm}`;
-  document.getElementById('levelChip').textContent=lv.name;
-  document.getElementById('levelDesc').textContent=lv.desc;
-  document.getElementById('timeSigLabel').textContent=`${lv.timeSig}/4拍子`;
-  document.getElementById('patNumLabel').textContent='パターン #1';
-  document.getElementById('dotsRow').innerHTML='';
-  document.getElementById('resultCard').style.display='none';
-  showFeedback('譜面を読んでスタート','ready','');
+  if (LEVELS[i].id > unlockedLevel) return;
+  currentLevel = i;
+  currentPatternIdx = 0;
+  patternResults = []; tapLog = [];
+  const lv = LEVELS[i];
+  bpm = lv.bpm;
+  document.getElementById('bpmSlider').value = bpm;
+  document.getElementById('bpmNum').textContent = bpm;
+  document.getElementById('bpmChip').textContent = `♩= ${bpm}`;
+  document.getElementById('levelChip').textContent = lv.name;
+  document.getElementById('levelDesc').textContent = lv.desc;
+  document.getElementById('timeSigLabel').textContent = `${lv.timeSig}/4拍子`;
+  document.getElementById('patNumLabel').textContent = 'パターン #1';
+  document.getElementById('dotsRow').innerHTML = '';
+  document.getElementById('resultCard').style.display = 'none';
+  showFeedback('譜面を読んでスタート', 'ready', '');
   renderLevelPills();
   drawStaff();
 }
 
 function updateXP() {
-  const maxXP=LEVELS[currentLevel].id*500;
-  document.getElementById('xpFill').style.width=Math.min(100,xp/maxXP*100)+'%';
+  const maxXP = LEVELS[currentLevel].id * 500;
+  document.getElementById('xpFill').style.width = Math.min(100, xp / maxXP * 100) + '%';
 }
-
-// ============================================================
-// SESSION START TIME TRACKING
-// ============================================================
-const _origBeginPlay = beginPlay;
-// Patch to store perf time
-window._sessionStartPN = null;
-const __beginPlay = beginPlay;
-// Override
-function patchedBeginPlay() {
-  __beginPlay();
-}
-
-// We need to capture performance.now when audio starts
-// Patch: store in startSession
-const _origStart = startSession;
-
-// Simpler approach: store in beginPlay directly
-let _beginPlayOrig = beginPlay;
 
 // ============================================================
 // INIT
 // ============================================================
-window.addEventListener('load', ()=>{
+window.addEventListener('load', () => {
   renderLevelPills();
   drawStaff();
-  // Tap timing patch: store perf.now at audio start
-  const _bp = beginPlay;
-  window.beginPlay = function() {
-    window._sessionStartPN = performance.now() + 650; // ~0.65s pre-delay + 50ms
-    _bp();
-  };
-  // Reassign
 });
 
-window.addEventListener('resize', ()=>{ drawStaff(); });
-
-// Fix onTap to use correct timing
-window.onTap = function(e) {
-  e.preventDefault();
-  if (sessionPhase !== 'playing') { return; }
-  const now = performance.now();
-
-  const btn = document.getElementById('tapArea');
-  btn.classList.add('hit');
-  setTimeout(()=>btn.classList.remove('hit'),80);
-
-  const ripple = document.createElement('div');
-  ripple.className='tap-ripple';
-  ripple.style.cssText='width:80px;height:80px;left:50%;top:50%;margin-left:-40px;margin-top:-40px;position:absolute;';
-  btn.appendChild(ripple);
-  setTimeout(()=>ripple.remove(),500);
-
-  playSnare();
-  tapLog.push(now);
-
-  // Quick feedback
-  const relMs = now - (window._sessionStartPN||now);
-  let bestDiff=9999, bestB=null;
-  expectedBeats.forEach(b=>{
-    const d=Math.abs(b.timeMs-relMs);
-    if(d<bestDiff){bestDiff=d;bestB=b;}
-  });
-  const PERFECT_MS=85,GOOD_MS=170;
-  if(bestDiff<PERFECT_MS) showFeedback('PERFECT!','perfect','');
-  else if(bestDiff<GOOD_MS) {
-    const diff=(bestB?bestB.timeMs-relMs:0);
-    showFeedback(diff>0?'EARLY':'LATE', diff>0?'early':'late','');
-  }
-  else showFeedback('MISS','miss','');
-};
-
-// Fix startSession to capture timing
-window.startSession = function() {
-  if(sessionPhase==='playing'){stopSession();return;}
-  getACtx();
-  patternResults=[];tapLog=[];
-  document.getElementById('dotsRow').innerHTML='';
-  document.getElementById('resultCard').style.display='none';
-  document.getElementById('feedbackMain').className='feedback-main ready';
-  document.getElementById('feedbackMain').textContent='3';
-  document.getElementById('startBtn').textContent='⏹ 停止';
-  sessionPhase='countdown';
-  let cnt=3;
-  const tick=()=>{
-    document.getElementById('feedbackMain').textContent=cnt>0?cnt:'GO!';
-    playClick(null,cnt===3||cnt===0);
-    if(cnt===0){
-      setTimeout(()=>{
-        window._sessionStartPN = performance.now() + 50;
-        beginPlay();
-      },400);
-    } else {
-      cnt--;
-      countdownTimer=setTimeout(tick,600);
-    }
-  };
-  tick();
-};
+window.addEventListener('resize', () => { drawStaff(); });
 </script>
 </body>
 </html>
