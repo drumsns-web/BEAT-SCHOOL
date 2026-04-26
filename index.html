@@ -746,199 +746,174 @@ function buildBeats(pattern) {
   return beats;
 }
 
-// 三連符グループを検出（連続するtを3個ずつグループ化）
+// 連続するtを3個ずつ三連符グループにまとめる
 function findTripletGroups(beats) {
-  const groups = []; // [{start, end}] beatのindexの範囲
+  const groups = [];
   let i = 0;
   while (i < beats.length) {
     if (beats[i].type === 't' && !beats[i].isRest) {
       const start = i;
-      let count = 0;
-      while (i < beats.length && beats[i].type === 't' && count < 3) { i++; count++; }
-      if (count === 3) groups.push({ start, end: i - 1 });
+      let cnt = 0;
+      while (i < beats.length && beats[i].type === 't' && cnt < 3) { i++; cnt++; }
+      if (cnt === 3) groups.push({ start, end: i - 1 });
       else i = start + 1;
-    } else {
-      i++;
-    }
+    } else { i++; }
   }
   return groups;
 }
 
-// ビームグループ: 同種の音符が連続する範囲（三連符グループも含む）
+// ビームグループを検出
 function findBeamGroups(beats, tripletGroups) {
-  const tripletIdxSet = new Set();
-  tripletGroups.forEach(g => { for (let i = g.start; i <= g.end; i++) tripletIdxSet.add(i); });
-
+  const tripletStarts = new Set(tripletGroups.map(g => g.start));
+  const tripletAll    = new Set(tripletGroups.flatMap(g => [g.start, g.start+1, g.end]));
   const groups = [];
   let i = 0;
   while (i < beats.length) {
     const b = beats[i];
-    if (b.isRest) { i++; continue; }
-
-    // 三連符グループ
+    if (b.isRest || b.type === 'q' || b.type === 'h' || b.type === 'w' || b.type === 'q.') { i++; continue; }
     if (b.type === 't') {
-      const tg = tripletGroups.find(g => g.start === i);
-      if (tg) {
-        groups.push({ type: 't', notes: [tg.start, tg.start+1, tg.end], beamCount: 1 });
-        i = tg.end + 1;
-        continue;
-      }
-    }
-
-    // 八分音符グループ（連続するeをまとめる）
-    if (b.type === 'e') {
-      const start = i;
-      while (i < beats.length && beats[i].type === 'e' && !beats[i].isRest) i++;
-      if (i - start >= 2) groups.push({ type: 'e', notes: Array.from({length: i-start}, (_,k)=>start+k), beamCount: 1 });
-      else i = start + 1;
+      if (tripletStarts.has(i)) {
+        const g = tripletGroups.find(g => g.start === i);
+        groups.push({ type:'t', notes:[g.start, g.start+1, g.end], beamCount:1 });
+        i = g.end + 1;
+      } else { i++; }
       continue;
     }
-
-    // 十六分音符グループ
-    if (b.type === 's') {
-      const start = i;
-      while (i < beats.length && beats[i].type === 's' && !beats[i].isRest) i++;
-      if (i - start >= 2) groups.push({ type: 's', notes: Array.from({length: i-start}, (_,k)=>start+k), beamCount: 2 });
-      else i = start + 1;
-      continue;
+    // e or s: 連続する同種をまとめる
+    const type = b.type; // 'e' or 's'
+    const start = i;
+    while (i < beats.length && beats[i].type === type && !beats[i].isRest) i++;
+    if (i - start >= 2) {
+      groups.push({ type, notes: Array.from({length:i-start},(_,k)=>start+k), beamCount: type==='s'?2:1 });
     }
-
-    i++;
+    // 1個だけなら単独（フラッグで描く）
   }
   return groups;
 }
 
 function drawStaff() {
-  const canvas = document.getElementById('staffCanvas');
-  const wrap = document.getElementById('sheetWrap');
+  const canvas  = document.getElementById('staffCanvas');
+  const wrap    = document.getElementById('sheetWrap');
   const W = wrap.clientWidth - 20;
-  const H = 140; // 高さを増やして三連符括弧が見切れないように
+  const H = 150;
   const DPR = window.devicePixelRatio || 2;
-  canvas.width = W * DPR;
+  canvas.width  = W * DPR;
   canvas.height = H * DPR;
-  canvas.style.width = W + 'px';
+  canvas.style.width  = W + 'px';
   canvas.style.height = H + 'px';
   const c = canvas.getContext('2d');
   c.scale(DPR, DPR);
   c.clearRect(0, 0, W, H);
 
   const pattern = getPattern();
-  const beats = buildBeats(pattern);
-  const lv = LEVELS[currentLevel];
-  const totalDur = beats.reduce((s, b) => s + b.dur, 0);
+  const beats   = buildBeats(pattern);
+  const lv      = LEVELS[currentLevel];
+  const totalDur = beats.reduce((s,b) => s+b.dur, 0);
 
-  // レイアウト定数
-  const staffY = 80;          // 五線（単線）Y位置 — 下め
-  const stemTop = staffY - 38; // 符尾の先端
-  const beamY   = stemTop + 2; // 一次ビームY
-  const bracketY = stemTop - 14; // 三連符括弧Y
+  // ── レイアウト定数 ──────────────────────────────────
+  // 一線パーカッション譜: 音符頭は線の上、符尾は上向き（スネア標準）
+  const lineY     = 90;   // スタッフ線Y（下めに置いて上に余白）
+  const headAbove = 10;   // 音符頭中心は lineY - headAbove
+  const noteY     = lineY - headAbove;  // 音符頭中心
+  const stemTop   = noteY - 34;         // 符尾の上端（上向き）
+  const beamY     = stemTop + 4;        // 一次ビームY（符尾の上端近く）
+  const bracketY  = stemTop - 16;       // 三連符括弧Y（ビームの上）
+  const flagStartY = stemTop;           // フラッグ起点（上端）
 
-  const noteAreaStart = 56;
-  const noteAreaEnd = W - 14;
-  const noteAreaW = noteAreaEnd - noteAreaStart;
+  const noteAreaStart = 58;
+  const noteAreaEnd   = W - 14;
+  const pxPerBeat     = (noteAreaEnd - noteAreaStart) / totalDur;
+  const HEAD_OFFSET   = 8; // セル左端から音符頭中心までのオフセット
 
-  // ── pxPerBeat: 拍数で均等割り、ただし最小幅を保証 ──
-  const pxPerBeat = noteAreaW / totalDur;
-
-  // 音符ごとのX中心を計算（音符幅の中央付近）
-  const HEAD_OFFSET = 8; // セル左端からの音符頭のオフセット
-  function getHeadX(beatIdx) {
-    const off = beats.slice(0, beatIdx).reduce((s, x) => s + x.dur, 0);
+  function getHeadX(i) {
+    const off = beats.slice(0,i).reduce((s,x)=>s+x.dur,0);
     return noteAreaStart + off * pxPerBeat + HEAD_OFFSET;
   }
-  function getStemX(beatIdx) {
-    const rx = (beats[beatIdx].type === 's' || beats[beatIdx].type === 't') ? 5 : 6;
-    return getHeadX(beatIdx) + rx;
+  function getStemX(i) {
+    const rx = (beats[i].type==='s'||beats[i].type==='t') ? 5 : 6;
+    return getHeadX(i) + rx; // 右端から符尾（下向きは右側）
   }
 
-  // ── 1. スタッフ線（単線パーカッション譜）──
+  // ── 1. スタッフ線 ─────────────────────────────────
   c.strokeStyle = '#2a2010';
-  c.lineWidth = 1.5;
-  c.beginPath(); c.moveTo(10, staffY); c.lineTo(W - 10, staffY); c.stroke();
+  c.lineWidth   = 1.8;
+  c.beginPath(); c.moveTo(12, lineY); c.lineTo(W-12, lineY); c.stroke();
 
-  // ── 2. パーカッションクレフ（縦2本線）──
-  c.lineWidth = 3.5;
-  c.strokeStyle = '#2a2010';
-  c.beginPath(); c.moveTo(14, staffY - 16); c.lineTo(14, staffY + 16); c.stroke();
-  c.lineWidth = 1.5;
-  c.beginPath(); c.moveTo(20, staffY - 12); c.lineTo(20, staffY + 12); c.stroke();
+  // ── 2. パーカッションクレフ（縦2本線）────────────────
+  c.lineWidth = 4;
+  c.strokeStyle = '#1a1408';
+  c.beginPath(); c.moveTo(15, lineY-20); c.lineTo(15, lineY+20); c.stroke();
+  c.lineWidth = 1.8;
+  c.beginPath(); c.moveTo(21, lineY-14); c.lineTo(21, lineY+14); c.stroke();
 
-  // ── 3. 拍子記号 ──
-  c.fillStyle = '#1a1408';
-  c.font = `bold 20px 'Shippori Mincho', serif`;
-  c.textAlign = 'center';
-  c.fillText(lv.timeSig, 36, staffY - 2);
-  c.fillText('4', 36, staffY + 16);
+  // ── 3. 拍子記号 ───────────────────────────────────
+  c.fillStyle  = '#1a1408';
+  c.textAlign  = 'center';
+  c.font = 'bold 20px serif';
+  c.fillText(String(lv.timeSig), 38, lineY - 2);
+  c.fillText('4', 38, lineY + 17);
 
-  // ── 4. 小節線 ──
-  const timeSig = lv.timeSig;
-  for (let beat = 0; beat <= totalDur + 0.001; beat += timeSig) {
-    if (beat > totalDur + 0.001) break;
+  // ── 4. 小節線 ─────────────────────────────────────
+  for (let beat=0; beat <= totalDur+0.001; beat += lv.timeSig) {
+    if (beat > totalDur+0.001) break;
     const bx = noteAreaStart + beat * pxPerBeat;
     const isLast = beat >= totalDur - 0.001;
-    c.strokeStyle = '#2a2010';
-    c.lineWidth = isLast ? 2.5 : 1.2;
-    c.beginPath();
-    c.moveTo(bx, staffY - 14);
-    c.lineTo(bx, staffY + 14);
-    c.stroke();
+    c.strokeStyle = '#1a1408';
+    c.lineWidth   = isLast ? 2.5 : 1.2;
+    c.beginPath(); c.moveTo(bx, lineY-16); c.lineTo(bx, lineY+16); c.stroke();
     if (isLast) {
       c.lineWidth = 1.2;
-      c.beginPath();
-      c.moveTo(bx + 5, staffY - 14);
-      c.lineTo(bx + 5, staffY + 14);
-      c.stroke();
+      c.beginPath(); c.moveTo(bx+5, lineY-16); c.lineTo(bx+5, lineY+16); c.stroke();
     }
   }
 
-  // ── 5. 拍の薄い目盛り ──
-  for (let beat = 1; beat < totalDur; beat += 1) {
+  // ── 5. 拍目盛り（薄く）────────────────────────────
+  for (let beat=1; beat<totalDur; beat+=1) {
     const bx = noteAreaStart + beat * pxPerBeat;
-    c.strokeStyle = 'rgba(80,60,20,0.12)';
+    c.strokeStyle = 'rgba(80,60,20,0.1)';
     c.lineWidth = 1;
-    c.beginPath(); c.moveTo(bx, staffY - 5); c.lineTo(bx, staffY + 5); c.stroke();
+    c.beginPath(); c.moveTo(bx, lineY-4); c.lineTo(bx, lineY+4); c.stroke();
   }
 
-  // ── 6. ビームグループ・三連符を事前解析 ──
+  // ── 6. グループ解析 ───────────────────────────────
   const tripletGroups = findTripletGroups(beats);
-  const beamGroups = findBeamGroups(beats, tripletGroups);
-  const beamedSet = new Set();
-  beamGroups.forEach(g => g.notes.forEach(n => beamedSet.add(n)));
+  const beamGroups    = findBeamGroups(beats, tripletGroups);
+  const beamedSet     = new Set(beamGroups.flatMap(g => g.notes));
+  window._notePositions = [];
 
-  // ── 7. 音符を描く ──
+  // ── 7. 音符・休符 ─────────────────────────────────
   beats.forEach((b, i) => {
-    const hx = getHeadX(i);
-    const sx = getStemX(i);
+    const hx  = getHeadX(i);
+    const sx  = getStemX(i);
     const res = patternResults[b.idx];
     const col = res ? NOTE_COLORS[res] : '#1a1408';
-
-    window._notePositions = window._notePositions || [];
     window._notePositions[i] = { x: hx };
 
     if (b.isRest) {
-      drawRest(c, b.type, hx, staffY, col);
+      drawRest(c, b.type, hx, lineY, col);
       return;
     }
 
-    // 音符頭
-    const rx = (b.type === 's' || b.type === 't') ? 5 : 6;
+    const rx     = (b.type==='s'||b.type==='t') ? 5 : 6;
     const filled = (b.type !== 'h' && b.type !== 'w');
-    drawNoteHead(c, hx, staffY, filled, col, rx);
 
-    // 符尾（全音符以外）
+    // 音符頭（noteY = lineY - headAbove）
+    drawNoteHead(c, hx, noteY, filled, col, rx);
+
+    // 符尾（上向き: 音符頭の右上端 → stemTop）
     if (b.type !== 'w') {
       c.strokeStyle = col;
-      c.lineWidth = 1.5;
+      c.lineWidth   = 1.8;
       c.beginPath();
-      c.moveTo(sx, staffY - rx * 0.7);
+      c.moveTo(sx, noteY - rx * 0.7);  // 音符頭の右上端
       c.lineTo(sx, stemTop);
       c.stroke();
 
-      // フラッグ（ビームなし単独音符のみ）
+      // フラッグ（ビームなし単独音符）── 上向き符尾なので右下へ垂れるフラッグ
       if (!beamedSet.has(i)) {
-        if (b.type === 'e') drawFlag(c, sx, stemTop, 1, col);
-        if (b.type === 's') drawFlag(c, sx, stemTop, 2, col);
-        if (b.type === 't') drawFlag(c, sx, stemTop, 1, col); // 単独三連符は旗1本
+        if (b.type === 'e') drawFlagUp(c, sx, flagStartY, 1, col);
+        if (b.type === 's') drawFlagUp(c, sx, flagStartY, 2, col);
+        if (b.type === 't') drawFlagUp(c, sx, flagStartY, 1, col);
       }
     }
 
@@ -946,123 +921,149 @@ function drawStaff() {
     if (b.type.includes('.')) {
       c.fillStyle = col;
       c.beginPath();
-      c.arc(hx + rx + 4, staffY - 3, 2.5, 0, Math.PI * 2);
+      c.arc(hx + rx + 4, noteY - 3, 2.5, 0, Math.PI*2);
       c.fill();
     }
   });
 
-  // ── 8. ビームを描く ──
+  // ── 8. ビーム ─────────────────────────────────────
   beamGroups.forEach(g => {
-    const col = '#1a1408'; // ビームは常に黒（採点後も混乱しないよう）
-    const nx = g.notes;
-    const x1 = getStemX(nx[0]);
-    const x2 = getStemX(nx[nx.length - 1]);
-
+    const col = '#1a1408';
+    const nx  = g.notes;
+    const x1  = getStemX(nx[0]);
+    const x2  = getStemX(nx[nx.length-1]);
     c.strokeStyle = col;
-    c.lineWidth = 3.5;
-    c.lineCap = 'square';
-
-    // 一次ビーム（八分・三連符すべて）
-    c.beginPath();
-    c.moveTo(x1, beamY);
-    c.lineTo(x2, beamY);
-    c.stroke();
-
-    // 二次ビーム（十六分音符）
+    c.lineWidth   = 4;
+    c.lineCap     = 'square';
+    // 一次ビーム
+    c.beginPath(); c.moveTo(x1, beamY); c.lineTo(x2, beamY); c.stroke();
+    // 二次ビーム（十六分）
     if (g.beamCount >= 2) {
-      c.beginPath();
-      c.moveTo(x1, beamY + 5);
-      c.lineTo(x2, beamY + 5);
-      c.stroke();
+      c.beginPath(); c.moveTo(x1, beamY-5); c.lineTo(x2, beamY-5); c.stroke();
     }
+    c.lineCap = 'butt'; c.lineWidth = 1;
 
-    c.lineCap = 'butt';
-    c.lineWidth = 1;
-
-    // 三連符括弧「3」
+    // 三連符括弧（ビームの下）
     if (g.type === 't') {
-      const bx1 = getHeadX(nx[0]);
-      const bx2 = getHeadX(nx[nx.length - 1]) + 10;
-      const mid = (bx1 + bx2) / 2;
-      const ty = bracketY;
-
-      c.strokeStyle = '#444';
-      c.lineWidth = 1.2;
-      // 左の縦線と横線
-      c.beginPath();
-      c.moveTo(bx1, ty + 6);
-      c.lineTo(bx1, ty);
-      c.lineTo(mid - 6, ty);
-      c.stroke();
-      // 右の横線と縦線
-      c.beginPath();
-      c.moveTo(mid + 6, ty);
-      c.lineTo(bx2, ty);
-      c.lineTo(bx2, ty + 6);
-      c.stroke();
-      // 「3」
-      c.fillStyle = '#333';
-      c.font = 'bold 12px sans-serif';
-      c.textAlign = 'center';
-      c.fillText('3', mid, ty - 1);
+      drawTripletBracket(c, getHeadX(nx[0]), getHeadX(nx[nx.length-1]), bracketY);
     }
   });
 
-  // 単独三連符（ビームグループに入らなかったt）にも括弧を付ける
+  // 単独三連符（ビームグループ外のt）にも括弧
   beats.forEach((b, i) => {
     if (b.type !== 't' || b.isRest || beamedSet.has(i)) return;
-    // 単独のtに括弧
     const hx = getHeadX(i);
-    const sx = getStemX(i);
-    const bx1 = hx - 5;
-    const bx2 = hx + 10;
-    const mid = (bx1 + bx2) / 2;
-    const ty = bracketY;
-    c.strokeStyle = '#444';
-    c.lineWidth = 1.2;
-    c.beginPath();
-    c.moveTo(bx1, ty + 6); c.lineTo(bx1, ty); c.lineTo(mid - 5, ty); c.stroke();
-    c.beginPath();
-    c.moveTo(mid + 5, ty); c.lineTo(bx2, ty); c.lineTo(bx2, ty + 6); c.stroke();
-    c.fillStyle = '#333';
-    c.font = 'bold 12px sans-serif';
-    c.textAlign = 'center';
-    c.fillText('3', mid, ty - 1);
+    drawTripletBracket(c, hx - 5, hx + 10, bracketY);
   });
 }
 
 function drawNoteHead(c, x, y, filled, col, rx=6) {
   c.beginPath();
-  c.ellipse(x, y, rx, rx*0.75, -0.25, 0, Math.PI*2);
-  if (filled) { c.fillStyle=col; c.fill(); }
-  else { c.strokeStyle=col; c.lineWidth=1.5; c.stroke(); }
+  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
+  c.fillStyle   = filled ? col : 'white';
+  c.strokeStyle = col;
+  c.lineWidth   = 1.5;
+  c.fill();
+  c.stroke();
 }
 
-function drawFlag(c, x, y, count, col) {
-  c.strokeStyle=col; c.lineWidth=1.5;
-  for (let f=0; f<count; f++) {
-    const fy = y + f*6;
+// 上向き符尾のフラッグ（右下へ垂れる）
+function drawFlagUp(c, x, y, count, col) {
+  c.strokeStyle = col;
+  c.lineWidth   = 1.6;
+  for (let f = 0; f < count; f++) {
+    const fy = y + f * 7;  // 複数フラッグは下へ並べる
     c.beginPath();
     c.moveTo(x, fy);
-    c.bezierCurveTo(x+14, fy+6, x+14, fy+12, x+6, fy+14);
+    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
     c.stroke();
   }
 }
 
+// 三連符括弧「3」
+function drawTripletBracket(c, x1, x2, y) {
+  const mid  = (x1 + x2) / 2;
+  const gap  = 7;
+  c.strokeStyle = '#333';
+  c.lineWidth   = 1.2;
+  // 左: 縦→横
+  c.beginPath();
+  c.moveTo(x1, y - 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
+  c.stroke();
+  // 右: 横→縦
+  c.beginPath();
+  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y - 6);
+  c.stroke();
+  // 数字「3」
+  c.fillStyle = '#222';
+  c.font      = 'bold 13px sans-serif';
+  c.textAlign = 'center';
+  c.fillText('3', mid, y + 4);
+}
+
 function drawRest(c, type, x, y, col) {
-  c.fillStyle=col; c.strokeStyle=col;
-  c.font = `bold 20px serif`;
-  c.textAlign='center';
-  if (type==='er') { c.fillText('𝄾', x, y+6); }
-  else if (type==='sr') { c.fillText('𝄿', x, y+6); }
-  else if (type==='r' || type==='qr') {
-    c.fillRect(x-6, y-8, 12, 7);
-  } else if (type==='hr') {
-    c.fillRect(x-6, y, 12, 5);
-  } else {
-    c.fillStyle=col; c.font='18px serif'; c.fillText('𝄽', x, y+8);
+  c.fillStyle   = col;
+  c.strokeStyle = col;
+  c.textAlign   = 'center';
+
+  if (type === 'r') {
+    // 四分休符: 手書き風ジグザグ
+    c.strokeStyle = col;
+    c.lineWidth   = 2;
+    c.beginPath();
+    c.moveTo(x - 3, y - 10);
+    c.lineTo(x + 4, y - 4);
+    c.lineTo(x - 4, y + 2);
+    c.lineTo(x + 3, y + 8);
+    c.stroke();
+    c.lineWidth = 1;
+  } else if (type === 'h' || type === 'hr') {
+    // 二分休符: 線の上に乗る長方形
+    c.fillRect(x - 7, y - 14, 14, 6);
+  } else if (type === 'w') {
+    // 全休符: 線の下に垂れ下がる長方形
+    c.fillRect(x - 7, y - 8, 14, 6);
+  } else if (type === 'er') {
+    // 八分休符: 手書き風
+    c.lineWidth = 2;
+    c.strokeStyle = col;
+    c.beginPath();
+    // 右上の斜め線
+    c.moveTo(x - 2, y - 8);
+    c.lineTo(x + 5, y - 2);
+    c.stroke();
+    // 丸い頭
+    c.beginPath();
+    c.arc(x + 4, y - 1, 3, 0, Math.PI * 2);
+    c.fill();
+    // 左下の曲線の尾
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(x + 1, y - 1);
+    c.bezierCurveTo(x - 6, y + 4, x - 4, y + 10, x + 2, y + 10);
+    c.stroke();
+    c.lineWidth = 1;
+  } else if (type === 'sr') {
+    // 十六分休符: 八分休符の二重版
+    c.lineWidth = 2;
+    c.strokeStyle = col;
+    // 上の斜め線
+    c.beginPath();
+    c.moveTo(x - 2, y - 10); c.lineTo(x + 5, y - 4); c.stroke();
+    c.beginPath(); c.arc(x + 4, y - 3, 3, 0, Math.PI*2); c.fill();
+    // 下の斜め線
+    c.beginPath();
+    c.moveTo(x - 2, y - 1); c.lineTo(x + 5, y + 5); c.stroke();
+    c.beginPath(); c.arc(x + 4, y + 6, 3, 0, Math.PI*2); c.fill();
+    // 縦の尾
+    c.beginPath();
+    c.moveTo(x + 1, y - 3);
+    c.bezierCurveTo(x - 5, y + 4, x - 3, y + 12, x + 2, y + 13);
+    c.stroke();
+    c.lineWidth = 1;
   }
 }
+
 
 // ============================================================
 // GAME LOGIC
@@ -1107,32 +1108,31 @@ function startSession() {
   tapLog = [];
   document.getElementById('dotsRow').innerHTML = '';
   document.getElementById('resultCard').style.display = 'none';
-  document.getElementById('startBtn').textContent = '&#9209; 停止';
+  document.getElementById('startBtn').textContent = '⏹ 停止';
   sessionPhase = 'countdown';
 
   const ac = getACtx();
   const secPerBeat = 60 / bpm;
 
-  // ac と performance.now を同時取得
-  const acNow = ac.currentTime;
-  const pnNow = performance.now();
+  // ★ acとpnを同時取得 → 以後のすべての時刻はここを基準にする
+  const acBase = ac.currentTime;
+  const pnBase = performance.now();
+  function acToPn(acT) { return pnBase + (acT - acBase) * 1000; }
 
-  // インカウント: 1・2・3・4 の4拍
+  // インカウント: 1・2・3・4
   const countBeats = 4;
-  const countStartAC = acNow + 0.1;
+  const countStartAC = acBase + 0.08;
   for (let i = 0; i < countBeats; i++) {
     playClick(countStartAC + i * secPerBeat, i === 0);
   }
 
-  // パターン開始 = 4拍目の次の拍
+  // ★ patternStartAC/PN を確定
   patternStartAC = countStartAC + countBeats * secPerBeat;
-  // patternStartPN: AudioCtxとperformance.nowの対応関係を記録
-  patternStartPN = pnNow + (patternStartAC - acNow) * 1000;
+  patternStartPN = acToPn(patternStartAC);
 
-  // UI数字表示（音と同タイミング）
-  const countStartDelay = (countStartAC - acNow) * 1000;
+  // UI数字表示: setTimeoutの誤差は表示だけなので許容
   for (let i = 0; i < countBeats; i++) {
-    const delayMs = countStartDelay + i * secPerBeat * 1000;
+    const delayMs = acToPn(countStartAC + i * secPerBeat) - pnBase;
     setTimeout(() => {
       if (sessionPhase !== 'countdown') return;
       document.getElementById('feedbackMain').textContent = i + 1;
@@ -1141,12 +1141,13 @@ function startSession() {
     }, delayMs);
   }
 
-  // 4拍目終わり = パターン開始
-  const patternStartDelay = countStartDelay + countBeats * secPerBeat * 1000;
+  // ★ beginPlay() の呼び出しもAudioCtx基準で計算したpnでスケジュール
+  // ただしbeginPlay()内ではac.currentTimeで再確認するので誤差は無害
+  const beginPlayDelay = patternStartPN - pnBase - 20; // 20ms早めに呼んで余裕を持たせる
   setTimeout(() => {
     if (sessionPhase !== 'countdown') return;
     beginPlay();
-  }, patternStartDelay);
+  }, Math.max(0, beginPlayDelay));
 }
 
 function beginPlay() {
@@ -1167,22 +1168,17 @@ function beginPlay() {
     playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
   }
 
-  // ★ バーアニメーション
-  // カーソル専用: beginPlay()が呼ばれた「実際の瞬間」のperformance.nowを記録し
-  // patternStartAC との差分でAudioCtxと同期させる
-  const ac2 = getACtx();
-  const acAtBeginPlay = ac2.currentTime;
+  // ★ バーアニメーション: acとpnを同時取得してAudioCtxと正確に同期
+  const acAtBeginPlay = ac.currentTime;
   const pnAtBeginPlay = performance.now();
-  // patternStartAC までの残り時間(ms)。マイナスなら既に過ぎている
-  const msUntilPatternStart = (patternStartAC - acAtBeginPlay) * 1000;
-  // カーソルの実際の開始点 (performance.now 基準)
-  const cursorStartPN = pnAtBeginPlay + msUntilPatternStart;
+  // patternStartAC に対応するperformance.now時刻を計算
+  const cursorStartPN = pnAtBeginPlay + (patternStartAC - acAtBeginPlay) * 1000;
 
   const cursorEl = document.getElementById('cursorLine');
   const sheetWrap = document.getElementById('sheetWrap');
   const sheetW = sheetWrap.clientWidth - 20;
-  const noteAreaStart = 52;
-  const noteAreaEnd = sheetW - 18;
+  const noteAreaStart = 58;
+  const noteAreaEnd = sheetW - 14;
   cursorEl.style.display = 'block';
   cursorEl.style.left = noteAreaStart + 10 + 'px';
 
