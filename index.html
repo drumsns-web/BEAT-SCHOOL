@@ -504,8 +504,8 @@ input[type=range]::-webkit-slider-thumb {
   </div>
   <div id="micThreshRow" class="mic-thresh-row" style="display:none;margin-bottom:8px;background:white;border:1.5px solid var(--border);border-radius:4px;padding:8px 14px;box-shadow:0 1px 4px var(--shadow);">
     <span>感度</span>
-    <input type="range" id="micThresh" min="1" max="50" value="15" style="flex:1;" oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
-    <span id="micThreshVal">15</span>
+    <input type="range" id="micThresh" min="5" max="80" value="20" style="flex:1;" oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
+    <span id="micThreshVal">20</span>
   </div>
 
   <!-- BPM -->
@@ -1217,9 +1217,9 @@ let inputMode = 'tap'; // 'tap' | 'mic'
 let micStream = null;
 let micAnalyser = null;
 let micAnimFrame = null;
-let micThreshold = 15;   // 0-255スケールでの音量閾値
+let micThreshold = 20;   // 前フレームからのdelta閾値（アタック検知）
 let micCooldownUntil = 0; // 連続検知防止のクールダウン(ms)
-const MIC_COOLDOWN_MS = 80; // 最短打音間隔
+const MIC_COOLDOWN_MS = 120; // 最短打音間隔（短すぎると残響を拾う）
 
 function setInputMode(mode) {
   inputMode = mode;
@@ -1243,7 +1243,8 @@ async function startMic() {
     const source = ac.createMediaStreamSource(micStream);
     micAnalyser = ac.createAnalyser();
     micAnalyser.fftSize = 256;
-    micAnalyser.smoothingTimeConstant = 0.3;
+    // smoothingを小さくしてアタック（立ち上がり）を鋭く検知する
+    micAnalyser.smoothingTimeConstant = 0.1;
     source.connect(micAnalyser);
     document.getElementById('micIndicator').classList.add('active');
     monitorMic();
@@ -1265,27 +1266,48 @@ function monitorMic() {
   if (!micAnalyser) return;
   const buf = new Uint8Array(micAnalyser.frequencyBinCount);
 
+  // ★ アタック検知用: 前フレームのピーク音量を保持
+  let prevPeak = 0;
+  // 直近の音量履歴（背景ノイズレベル推定用）
+  const peakHistory = new Array(20).fill(0);
+  let histIdx = 0;
+
   function tick() {
     micAnimFrame = requestAnimationFrame(tick);
     micAnalyser.getByteFrequencyData(buf);
 
-    // 広帯域のピーク音量（スネア・クラップ・声どれでも拾う）
+    // 全帯域のピーク音量を計算
     let peak = 0;
     for (let i = 0; i < buf.length; i++) peak = Math.max(peak, buf[i]);
 
-    // インジケーター色更新
-    const pct = peak / 255;
-    const ind = document.getElementById('micIndicator');
-    ind.style.background = pct > micThreshold/255
-      ? `rgba(200,57,10,${Math.min(1, pct * 1.5)})`
-      : '';
+    // 背景ノイズレベル（直近20フレームの平均）
+    peakHistory[histIdx % peakHistory.length] = peak;
+    histIdx++;
+    const bgLevel = peakHistory.reduce((a, b) => a + b, 0) / peakHistory.length;
 
-    // 打音検知: セッション中のみ判定
+    // ★ アタック = 前フレームからの急激な上昇量
+    const delta = peak - prevPeak;
+    prevPeak = peak;
+
+    // インジケーター: deltaの大きさで光る
+    const ind = document.getElementById('micIndicator');
+    const hitDetected = delta >= micThreshold && peak > bgLevel + 10;
+    ind.style.background = hitDetected
+      ? 'rgba(200,57,10,0.8)'
+      : peak > bgLevel + 5
+        ? `rgba(200,146,10,${Math.min(0.5, (peak - bgLevel) / 100)})`
+        : '';
+    ind.classList.toggle('active', peak > bgLevel + 5);
+
+    // ★ 打音判定:
+    //   1. 前フレームからの音量上昇(delta)が閾値以上
+    //   2. 現在音量が背景ノイズより十分高い
+    //   3. クールダウン中でない
     if (sessionPhase === 'playing') {
       const now = performance.now();
-      if (peak >= micThreshold && now > micCooldownUntil) {
+      if (hitDetected && now > micCooldownUntil) {
         micCooldownUntil = now + MIC_COOLDOWN_MS;
-        onHit(); // タップと同じ判定関数を呼ぶ
+        onHit();
       }
     }
   }
