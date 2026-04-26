@@ -666,7 +666,8 @@ let listenTimer = null;
 let totalScore = 0;
 let streak = 0;
 let xp = 0;
-let unlockedLevel = 1;
+// localStorageからクリア済みレベルを復元
+let unlockedLevel = parseInt(localStorage.getItem('snare_unlockedLevel') || '1', 10);
 let patternResults = []; // per-note result: 'p','g','e','l','m'
 let audioCtx = null;
 
@@ -1095,7 +1096,17 @@ function beginPlay() {
     playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
   }
 
-  // ★ バーアニメーション：patternStartPN を基準に requestAnimationFrame で動かす
+  // ★ バーアニメーション
+  // カーソル専用: beginPlay()が呼ばれた「実際の瞬間」のperformance.nowを記録し
+  // patternStartAC との差分でAudioCtxと同期させる
+  const ac2 = getACtx();
+  const acAtBeginPlay = ac2.currentTime;
+  const pnAtBeginPlay = performance.now();
+  // patternStartAC までの残り時間(ms)。マイナスなら既に過ぎている
+  const msUntilPatternStart = (patternStartAC - acAtBeginPlay) * 1000;
+  // カーソルの実際の開始点 (performance.now 基準)
+  const cursorStartPN = pnAtBeginPlay + msUntilPatternStart;
+
   const cursorEl = document.getElementById('cursorLine');
   const sheetWrap = document.getElementById('sheetWrap');
   const sheetW = sheetWrap.clientWidth - 20;
@@ -1104,10 +1115,10 @@ function beginPlay() {
   cursorEl.style.display = 'block';
   cursorEl.style.left = noteAreaStart + 10 + 'px';
 
-  function animCursor(ts) {
+  function animCursor() {
     if (sessionPhase !== 'playing') return;
-    const elapsedMs = performance.now() - patternStartPN;
-    const pct = Math.min(elapsedMs / totalMs, 1);
+    const elapsedMs = performance.now() - cursorStartPN;
+    const pct = Math.max(0, Math.min(elapsedMs / totalMs, 1));
     const cursorX = noteAreaStart + pct * (noteAreaEnd - noteAreaStart);
     cursorEl.style.left = (cursorX + 10) + 'px';
 
@@ -1218,6 +1229,7 @@ function evalSession() {
 
   if (acc >= 70 && currentLevel + 1 < LEVELS.length && LEVELS[currentLevel + 1].id > unlockedLevel) {
     unlockedLevel = LEVELS[currentLevel + 1].id;
+    localStorage.setItem('snare_unlockedLevel', unlockedLevel);
     renderLevelPills();
   }
 
@@ -1340,6 +1352,13 @@ window.addEventListener('load', () => {
   renderLevelPills();
   drawStaff();
 });
+
+// デバッグ用: localStorage リセット（コンソールから呼べる）
+function resetProgress() {
+  localStorage.removeItem('snare_unlockedLevel');
+  unlockedLevel = 1;
+  renderLevelPills();
+}
 
 window.addEventListener('resize', () => { drawStaff(); });
 </script>
