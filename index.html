@@ -630,19 +630,27 @@ const LEVELS = [
   {
     id:9, name:'Lv.9', desc:'複合リズム', timeSig:4, bpm:88,
     patterns: [
-      [{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'e'},{t:'q'}],
-      [{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'q'}],
-      [{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'s'},{t:'s'},{t:'q'},{t:'q'}],
-      [{t:'q.'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'q'}],
+      // e(0.5)+t*3(1)+s*4(1)+e(0.5)+q(1) = 4.0拍
+      [{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'e'},{t:'q'}],
+      // q(1)+t*3(1)+s*4(1)+q(1) = 4.0拍
+      [{t:'q'},{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'}],
+      // t*3(1)+e(0.5)+e(0.5)+s*4(1)+q(1) = 4.0拍
+      [{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'}],
+      // e(0.5)+e(0.5)+t*3(1)+e(0.5)+e(0.5)+q(1) = 4.0拍
+      [{t:'e'},{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'q'}],
     ]
   },
   {
-    id:10, name:'Lv.10', desc:'上級・高速変拍子', timeSig:5, bpm:92,
+    id:10, name:'Lv.10', desc:'上級・5拍子', timeSig:5, bpm:88,
     patterns: [
+      // q(1)+e+e(1)+t*3(1)+q(1)+q(1) = 5拍
       [{t:'q'},{t:'e'},{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'q'}],
-      [{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'e'},{t:'q'},{t:'e'},{t:'e'}],
-      [{t:'e'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'q'}],
-      [{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'e'},{t:'e'}],
+      // t*3(1)+s*4(1)+q(1)+e+e(1)+q(1) = 5拍
+      [{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'},{t:'e'},{t:'e'},{t:'q'}],
+      // e+e(1)+s*4(1)+t*3(1)+e+e(1)+q(1) = 5拍
+      [{t:'e'},{t:'e'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'q'}],
+      // s*4(1)+t*3(1)+q(1)+e+e(1)+q(1) = 5拍
+      [{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'e'},{t:'e'},{t:'q'}],
     ]
   },
 ];
@@ -729,31 +737,82 @@ function getPattern() {
 }
 
 function buildBeats(pattern) {
-  // expand pattern into list of { dur, isRest, beamGroup }
   const beats = [];
-  const lv = LEVELS[currentLevel];
-  const secPerBeat = 60/bpm;
-  let timeMs = 0;
-  let eighthGroup = [];
-  let sixteenthGroup = [];
-  let tripletGroup = [];
-
-  function flushGroups() {}
-
-  pattern.forEach((note,i) => {
-    const isRest = !!NOTE_IS_REST[note.t] || note.t==='r';
+  pattern.forEach((note, i) => {
+    const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
     const dur = NOTE_DUR[note.t] || 1;
-    beats.push({ timeMs, dur, isRest, type:note.t, idx:i });
-    timeMs += dur * secPerBeat * 1000;
+    beats.push({ dur, isRest, type: note.t, idx: i });
   });
   return beats;
+}
+
+// 三連符グループを検出（連続するtを3個ずつグループ化）
+function findTripletGroups(beats) {
+  const groups = []; // [{start, end}] beatのindexの範囲
+  let i = 0;
+  while (i < beats.length) {
+    if (beats[i].type === 't' && !beats[i].isRest) {
+      const start = i;
+      let count = 0;
+      while (i < beats.length && beats[i].type === 't' && count < 3) { i++; count++; }
+      if (count === 3) groups.push({ start, end: i - 1 });
+      else i = start + 1;
+    } else {
+      i++;
+    }
+  }
+  return groups;
+}
+
+// ビームグループ: 同種の音符が連続する範囲（三連符グループも含む）
+function findBeamGroups(beats, tripletGroups) {
+  const tripletIdxSet = new Set();
+  tripletGroups.forEach(g => { for (let i = g.start; i <= g.end; i++) tripletIdxSet.add(i); });
+
+  const groups = [];
+  let i = 0;
+  while (i < beats.length) {
+    const b = beats[i];
+    if (b.isRest) { i++; continue; }
+
+    // 三連符グループ
+    if (b.type === 't') {
+      const tg = tripletGroups.find(g => g.start === i);
+      if (tg) {
+        groups.push({ type: 't', notes: [tg.start, tg.start+1, tg.end], beamCount: 1 });
+        i = tg.end + 1;
+        continue;
+      }
+    }
+
+    // 八分音符グループ（連続するeをまとめる）
+    if (b.type === 'e') {
+      const start = i;
+      while (i < beats.length && beats[i].type === 'e' && !beats[i].isRest) i++;
+      if (i - start >= 2) groups.push({ type: 'e', notes: Array.from({length: i-start}, (_,k)=>start+k), beamCount: 1 });
+      else i = start + 1;
+      continue;
+    }
+
+    // 十六分音符グループ
+    if (b.type === 's') {
+      const start = i;
+      while (i < beats.length && beats[i].type === 's' && !beats[i].isRest) i++;
+      if (i - start >= 2) groups.push({ type: 's', notes: Array.from({length: i-start}, (_,k)=>start+k), beamCount: 2 });
+      else i = start + 1;
+      continue;
+    }
+
+    i++;
+  }
+  return groups;
 }
 
 function drawStaff() {
   const canvas = document.getElementById('staffCanvas');
   const wrap = document.getElementById('sheetWrap');
   const W = wrap.clientWidth - 20;
-  const H = 110;
+  const H = 140; // 高さを増やして三連符括弧が見切れないように
   const DPR = window.devicePixelRatio || 2;
   canvas.width = W * DPR;
   canvas.height = H * DPR;
@@ -761,198 +820,214 @@ function drawStaff() {
   canvas.style.height = H + 'px';
   const c = canvas.getContext('2d');
   c.scale(DPR, DPR);
-  c.clearRect(0,0,W,H);
+  c.clearRect(0, 0, W, H);
 
   const pattern = getPattern();
   const beats = buildBeats(pattern);
   const lv = LEVELS[currentLevel];
+  const totalDur = beats.reduce((s, b) => s + b.dur, 0);
 
-  // Staff: 1-line percussion staff (or 5-line)
-  const staffY = 50; // center line y
-  const staffTop = staffY - 24;
-  const staffBot = staffY + 24;
+  // レイアウト定数
+  const staffY = 80;          // 五線（単線）Y位置 — 下め
+  const stemTop = staffY - 38; // 符尾の先端
+  const beamY   = stemTop + 2; // 一次ビームY
+  const bracketY = stemTop - 14; // 三連符括弧Y
 
-  // Draw single percussion staff line
-  c.strokeStyle = '#2a2010';
-  c.lineWidth = 1.5;
-  c.beginPath(); c.moveTo(10, staffY); c.lineTo(W-10, staffY); c.stroke();
-
-  // Percussion clef (double bar)
-  c.strokeStyle = '#2a2010';
-  c.lineWidth = 3;
-  c.beginPath(); c.moveTo(14, staffTop-6); c.lineTo(14, staffBot+6); c.stroke();
-  c.lineWidth = 1.5;
-  c.beginPath(); c.moveTo(19, staffTop-4); c.lineTo(19, staffBot+4); c.stroke();
-  c.lineWidth = 1;
-
-  // Time signature
-  c.fillStyle = '#1a1408';
-  c.font = `bold 18px 'Shippori Mincho', serif`;
-  c.textAlign = 'center';
-  c.fillText(lv.timeSig, 32, staffY - 4);
-  c.fillText('4', 32, staffY + 14);
-
-  // Calculate total beats in pattern
-  const totalDur = beats.reduce((s,b)=>s+b.dur, 0);
-  const noteAreaStart = 52;
-  const noteAreaEnd = W - 18;
+  const noteAreaStart = 56;
+  const noteAreaEnd = W - 14;
   const noteAreaW = noteAreaEnd - noteAreaStart;
+
+  // ── pxPerBeat: 拍数で均等割り、ただし最小幅を保証 ──
   const pxPerBeat = noteAreaW / totalDur;
 
-  // Draw barlines at beat boundaries (for 4/4: every 4 beats; for 3/4: every 3)
+  // 音符ごとのX中心を計算（音符幅の中央付近）
+  const HEAD_OFFSET = 8; // セル左端からの音符頭のオフセット
+  function getHeadX(beatIdx) {
+    const off = beats.slice(0, beatIdx).reduce((s, x) => s + x.dur, 0);
+    return noteAreaStart + off * pxPerBeat + HEAD_OFFSET;
+  }
+  function getStemX(beatIdx) {
+    const rx = (beats[beatIdx].type === 's' || beats[beatIdx].type === 't') ? 5 : 6;
+    return getHeadX(beatIdx) + rx;
+  }
+
+  // ── 1. スタッフ線（単線パーカッション譜）──
+  c.strokeStyle = '#2a2010';
+  c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(10, staffY); c.lineTo(W - 10, staffY); c.stroke();
+
+  // ── 2. パーカッションクレフ（縦2本線）──
+  c.lineWidth = 3.5;
+  c.strokeStyle = '#2a2010';
+  c.beginPath(); c.moveTo(14, staffY - 16); c.lineTo(14, staffY + 16); c.stroke();
+  c.lineWidth = 1.5;
+  c.beginPath(); c.moveTo(20, staffY - 12); c.lineTo(20, staffY + 12); c.stroke();
+
+  // ── 3. 拍子記号 ──
+  c.fillStyle = '#1a1408';
+  c.font = `bold 20px 'Shippori Mincho', serif`;
+  c.textAlign = 'center';
+  c.fillText(lv.timeSig, 36, staffY - 2);
+  c.fillText('4', 36, staffY + 16);
+
+  // ── 4. 小節線 ──
   const timeSig = lv.timeSig;
-  for (let beat=0; beat<=totalDur; beat+=timeSig) {
+  for (let beat = 0; beat <= totalDur + 0.001; beat += timeSig) {
+    if (beat > totalDur + 0.001) break;
     const bx = noteAreaStart + beat * pxPerBeat;
-    const isLast = beat >= totalDur;
+    const isLast = beat >= totalDur - 0.001;
     c.strokeStyle = '#2a2010';
-    c.lineWidth = isLast ? 3 : 1;
+    c.lineWidth = isLast ? 2.5 : 1.2;
     c.beginPath();
-    c.moveTo(bx, staffTop-4);
-    c.lineTo(bx, staffBot+4);
+    c.moveTo(bx, staffY - 14);
+    c.lineTo(bx, staffY + 14);
     c.stroke();
     if (isLast) {
       c.lineWidth = 1.2;
       c.beginPath();
-      c.moveTo(bx+5, staffTop-4);
-      c.lineTo(bx+5, staffBot+4);
+      c.moveTo(bx + 5, staffY - 14);
+      c.lineTo(bx + 5, staffY + 14);
       c.stroke();
     }
   }
-  c.lineWidth = 1;
 
-  // Beat subdivision markers (light)
-  for (let beat=0; beat<=totalDur; beat+=1) {
+  // ── 5. 拍の薄い目盛り ──
+  for (let beat = 1; beat < totalDur; beat += 1) {
     const bx = noteAreaStart + beat * pxPerBeat;
-    c.strokeStyle = 'rgba(100,80,40,0.15)';
-    c.beginPath(); c.moveTo(bx, staffY-4); c.lineTo(bx, staffY+4); c.stroke();
+    c.strokeStyle = 'rgba(80,60,20,0.12)';
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(bx, staffY - 5); c.lineTo(bx, staffY + 5); c.stroke();
   }
 
-  // Store note positions for cursor
-  window._notePositions = [];
+  // ── 6. ビームグループ・三連符を事前解析 ──
+  const tripletGroups = findTripletGroups(beats);
+  const beamGroups = findBeamGroups(beats, tripletGroups);
+  const beamedSet = new Set();
+  beamGroups.forEach(g => g.notes.forEach(n => beamedSet.add(n)));
 
-  // Beam groups: collect consecutive eighths/sixteenths
-  const beamGroups = [];
-  let curGroup = null;
-  beats.forEach((b,i) => {
-    const isBeamable = (b.type==='e'||b.type==='s'||b.type==='t') && !b.isRest;
-    if (isBeamable) {
-      if (!curGroup) curGroup = { type:b.type, notes:[] };
-      curGroup.notes.push(i);
-    } else {
-      if (curGroup && curGroup.notes.length > 0) beamGroups.push(curGroup);
-      curGroup = null;
-    }
-  });
-  if (curGroup) beamGroups.push(curGroup);
-
-  const beamedIdx = new Set();
-  beamGroups.forEach(g => { if (g.notes.length >= 2) g.notes.forEach(i=>beamedIdx.add(i)); });
-
-  // Draw notes
+  // ── 7. 音符を描く ──
   beats.forEach((b, i) => {
-    const offsetBeats = beats.slice(0, i).reduce((s, x) => s + x.dur, 0);
-    // headX: note頭の中心X。各音符の左端から少し右に配置
-    const cellLeft = noteAreaStart + offsetBeats * pxPerBeat;
-    const headX = cellLeft + Math.min(pxPerBeat * 0.25, 14);
-
-    window._notePositions.push({ x: headX, timeMs: b.timeMs });
-
-    const res = patternResults[i];
+    const hx = getHeadX(i);
+    const sx = getStemX(i);
+    const res = patternResults[b.idx];
     const col = res ? NOTE_COLORS[res] : '#1a1408';
-    c.fillStyle = col;
-    c.strokeStyle = col;
+
+    window._notePositions = window._notePositions || [];
+    window._notePositions[i] = { x: hx };
 
     if (b.isRest) {
-      // Draw rest symbol
-      drawRest(c, b.type, headX, staffY, col);
-    } else {
-      // Note head
-      const filled = b.type !== 'h' && b.type !== 'w';
-      drawNoteHead(c, headX, staffY, filled, col, b.type==='s'||b.type==='t' ? 5 : 6);
+      drawRest(c, b.type, hx, staffY, col);
+      return;
+    }
 
-      // Stem (upward): stems go up from right side of notehead
-      if (b.type !== 'w') {
-        const rx = (b.type === 's' || b.type === 't') ? 5 : 6;
-        const stemX = headX + rx;
-        c.strokeStyle = col;
-        c.lineWidth = 1.5;
-        c.beginPath();
-        c.moveTo(stemX, staffY - rx * 0.75);
-        c.lineTo(stemX, staffY - 30);
-        c.stroke();
+    // 音符頭
+    const rx = (b.type === 's' || b.type === 't') ? 5 : 6;
+    const filled = (b.type !== 'h' && b.type !== 'w');
+    drawNoteHead(c, hx, staffY, filled, col, rx);
 
-        // Flags for non-beamed notes
-        if (!beamedIdx.has(i)) {
-          if (b.type === 'e') drawFlag(c, stemX, staffY - 30, 1, col);
-          if (b.type === 's') drawFlag(c, stemX, staffY - 30, 2, col);
-          if (b.type === 't') drawFlag(c, stemX, staffY - 30, 2, col);
-        }
-      }
+    // 符尾（全音符以外）
+    if (b.type !== 'w') {
+      c.strokeStyle = col;
+      c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(sx, staffY - rx * 0.7);
+      c.lineTo(sx, stemTop);
+      c.stroke();
 
-      // Dot for dotted notes
-      if (b.type.includes('.')) {
-        c.fillStyle = col;
-        c.beginPath();
-        c.arc(headX + 10, staffY - 2, 2, 0, Math.PI*2);
-        c.fill();
+      // フラッグ（ビームなし単独音符のみ）
+      if (!beamedSet.has(i)) {
+        if (b.type === 'e') drawFlag(c, sx, stemTop, 1, col);
+        if (b.type === 's') drawFlag(c, sx, stemTop, 2, col);
+        if (b.type === 't') drawFlag(c, sx, stemTop, 1, col); // 単独三連符は旗1本
       }
     }
 
-    // Triplet bracket
-    if (b.type === 't') {
-      // find group
-      beamGroups.filter(g=>g.notes.includes(i) && g.notes.length===3).forEach(g=>{
-        if (g.notes[0]===i) {
-          const x1 = noteAreaStart + beats.slice(0,g.notes[0]).reduce((s,x)=>s+x.dur,0)*pxPerBeat;
-          const x3 = noteAreaStart + (beats.slice(0,g.notes[2]).reduce((s,x)=>s+x.dur,0) + beats[g.notes[2]].dur)*pxPerBeat;
-          const ty = staffY - 38;
-          c.strokeStyle = '#555';
-          c.lineWidth = 1;
-          c.beginPath();
-          c.moveTo(x1, ty); c.lineTo(x1, ty+5);
-          c.moveTo(x1, ty); c.lineTo((x1+x3)/2-5, ty);
-          c.stroke();
-          c.fillStyle = '#555';
-          c.font = '10px serif';
-          c.textAlign = 'center';
-          c.fillText('3', (x1+x3)/2, ty-1);
-          c.strokeStyle = '#555';
-          c.beginPath();
-          c.moveTo((x1+x3)/2+5, ty); c.lineTo(x3, ty); c.lineTo(x3, ty+5);
-          c.stroke();
-        }
-      });
+    // 付点
+    if (b.type.includes('.')) {
+      c.fillStyle = col;
+      c.beginPath();
+      c.arc(hx + rx + 4, staffY - 3, 2.5, 0, Math.PI * 2);
+      c.fill();
     }
   });
 
-  // Draw beams
+  // ── 8. ビームを描く ──
   beamGroups.forEach(g => {
-    if (g.notes.length < 2) return;
-    const getHeadX = idx => {
-      const off = beats.slice(0, idx).reduce((s, x) => s + x.dur, 0);
-      return noteAreaStart + off * pxPerBeat + Math.min(pxPerBeat * 0.25, 14);
-    };
-    const x1 = getHeadX(g.notes[0]);
-    const x2 = getHeadX(g.notes[g.notes.length - 1]);
-    const beamY = staffY - 30;
-    const bCol = patternResults[g.notes[0]] ? NOTE_COLORS[patternResults[g.notes[0]]] : '#1a1408';
-    // Primary beam (eighth)
-    c.strokeStyle = bCol;
-    c.lineWidth = 4;
+    const col = '#1a1408'; // ビームは常に黒（採点後も混乱しないよう）
+    const nx = g.notes;
+    const x1 = getStemX(nx[0]);
+    const x2 = getStemX(nx[nx.length - 1]);
+
+    c.strokeStyle = col;
+    c.lineWidth = 3.5;
     c.lineCap = 'square';
+
+    // 一次ビーム（八分・三連符すべて）
     c.beginPath();
-    c.moveTo(x1 + (g.type === 's' || g.type === 't' ? 5 : 6), beamY);
-    c.lineTo(x2 + (g.type === 's' || g.type === 't' ? 5 : 6), beamY);
+    c.moveTo(x1, beamY);
+    c.lineTo(x2, beamY);
     c.stroke();
-    // Secondary beam (sixteenth/triplet)
-    if (g.type === 's' || g.type === 't') {
+
+    // 二次ビーム（十六分音符）
+    if (g.beamCount >= 2) {
       c.beginPath();
-      c.moveTo(x1 + 5, beamY + 5);
-      c.lineTo(x2 + 5, beamY + 5);
+      c.moveTo(x1, beamY + 5);
+      c.lineTo(x2, beamY + 5);
       c.stroke();
     }
+
     c.lineCap = 'butt';
     c.lineWidth = 1;
+
+    // 三連符括弧「3」
+    if (g.type === 't') {
+      const bx1 = getHeadX(nx[0]);
+      const bx2 = getHeadX(nx[nx.length - 1]) + 10;
+      const mid = (bx1 + bx2) / 2;
+      const ty = bracketY;
+
+      c.strokeStyle = '#444';
+      c.lineWidth = 1.2;
+      // 左の縦線と横線
+      c.beginPath();
+      c.moveTo(bx1, ty + 6);
+      c.lineTo(bx1, ty);
+      c.lineTo(mid - 6, ty);
+      c.stroke();
+      // 右の横線と縦線
+      c.beginPath();
+      c.moveTo(mid + 6, ty);
+      c.lineTo(bx2, ty);
+      c.lineTo(bx2, ty + 6);
+      c.stroke();
+      // 「3」
+      c.fillStyle = '#333';
+      c.font = 'bold 12px sans-serif';
+      c.textAlign = 'center';
+      c.fillText('3', mid, ty - 1);
+    }
+  });
+
+  // 単独三連符（ビームグループに入らなかったt）にも括弧を付ける
+  beats.forEach((b, i) => {
+    if (b.type !== 't' || b.isRest || beamedSet.has(i)) return;
+    // 単独のtに括弧
+    const hx = getHeadX(i);
+    const sx = getStemX(i);
+    const bx1 = hx - 5;
+    const bx2 = hx + 10;
+    const mid = (bx1 + bx2) / 2;
+    const ty = bracketY;
+    c.strokeStyle = '#444';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(bx1, ty + 6); c.lineTo(bx1, ty); c.lineTo(mid - 5, ty); c.stroke();
+    c.beginPath();
+    c.moveTo(mid + 5, ty); c.lineTo(bx2, ty); c.lineTo(bx2, ty + 6); c.stroke();
+    c.fillStyle = '#333';
+    c.font = 'bold 12px sans-serif';
+    c.textAlign = 'center';
+    c.fillText('3', mid, ty - 1);
   });
 }
 
@@ -1001,15 +1076,13 @@ function setBpm(v) {
 function buildExpectedBeats() {
   const pattern = getPattern();
   const secPerBeat = 60 / bpm;
-  // patternStartPN は halfBeat分早く設定されているので、
-  // expectedBeatsのtimeMsも同じ分だけずらして基準を合わせる
-  const halfBeatMs = secPerBeat * 0.5 * 1000;
   let timeSec = 0;
   const beats = [];
   pattern.forEach((note, i) => {
     const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
     const dur = NOTE_DUR[note.t] || 1;
-    if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000 + halfBeatMs, idx: i, dur });
+    // timeMs = patternStartACからの経過秒をmsに変換（オフセットなし）
+    if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000, idx: i, dur });
     timeSec += dur * secPerBeat;
   });
   return beats;
@@ -1053,10 +1126,8 @@ function startSession() {
 
   // パターン開始 = 4拍目の次の拍
   patternStartAC = countStartAC + countBeats * secPerBeat;
-  // setTimeoutの遅延誤差でbeginPlayが少し遅れるため、
-  // 半拍分早くbaselineを設定して1拍目頭を確実に受け付ける
-  const halfBeatMs = secPerBeat * 0.5 * 1000;
-  patternStartPN = pnNow + (patternStartAC - acNow) * 1000 - halfBeatMs;
+  // patternStartPN: AudioCtxとperformance.nowの対応関係を記録
+  patternStartPN = pnNow + (patternStartAC - acNow) * 1000;
 
   // UI数字表示（音と同タイミング）
   const countStartDelay = (countStartAC - acNow) * 1000;
@@ -1151,8 +1222,9 @@ function onTap(e) {
   e.preventDefault();
   if (sessionPhase !== 'playing') return;
 
-  // ★ タップ時刻をpatternStartPNからの経過ms で記録
-  const tapRelMs = performance.now() - patternStartPN;
+  // タップ時刻をAudioCtx基準で計算（setTimeout遅延の影響を受けない）
+  const ac = getACtx();
+  const tapRelMs = (ac.currentTime - patternStartAC) * 1000;
 
   // ビジュアル
   const btn = document.getElementById('tapArea');
