@@ -531,10 +531,26 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 
   <!-- Controls -->
+  <!-- 苦手モードバナー -->
+  <div class="weak-mode-banner" id="weakModeBanner" onclick="exitWeakMode()">
+    ★ 苦手パターン練習中 — タップして通常に戻る
+  </div>
+
   <div class="controls">
     <button class="btn start" id="startBtn" onclick="startSession()">▶ スタート</button>
     <button class="btn listen-btn" onclick="listenPattern()">👂 聴く</button>
     <button class="btn next-btn" onclick="nextPattern()">→ 次のパターン</button>
+    <button class="btn" id="weakBtn" onclick="toggleWeak()" style="border-color:var(--border);color:var(--muted);">☆ 苦手に追加</button>
+    <button class="btn" onclick="toggleWeakPanel()" style="border-color:var(--blue);color:var(--blue);">📋 苦手一覧</button>
+  </div>
+
+  <!-- 苦手パターン一覧 -->
+  <div class="weak-panel" id="weakPanel" style="display:none;">
+    <div class="weak-panel-title">
+      <span>— 苦手パターン一覧 —</span>
+      <button class="btn" onclick="enterWeakMode()" style="font-size:11px;padding:4px 10px;border-color:var(--accent);color:var(--accent);">まとめて練習</button>
+    </div>
+    <div class="weak-list" id="weakList"></div>
   </div>
 
   <!-- Result -->
@@ -552,132 +568,254 @@ input[type=range]::-webkit-slider-thumb {
 
 <script>
 // ============================================================
-// LEVEL DEFINITIONS
 // ============================================================
+// LEVEL DEFINITIONS & RANDOM PATTERN GENERATOR
+// ============================================================
+
+// 各レベルの定義（固定パターンは削除し、ランダム生成ルールのみ持つ）
 const LEVELS = [
-  {
-    id:1, name:'Lv.1', desc:'四分音符のみ', timeSig:4, bpm:70,
-    patterns: [
-      [{t:'q'},{t:'q'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'q'},{t:'r'},{t:'q'}],
-      [{t:'q'},{t:'r'},{t:'q'},{t:'q'}],
-      [{t:'r'},{t:'q'},{t:'q'},{t:'q'}],
-    ]
-  },
-  {
-    id:2, name:'Lv.2', desc:'二分音符・全休符', timeSig:4, bpm:72,
-    patterns: [
-      [{t:'h'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'h'},{t:'q'}],
-      [{t:'q'},{t:'q'},{t:'h'}],
-      [{t:'h'},{t:'h'}],
-    ]
-  },
-  {
-    id:3, name:'Lv.3', desc:'八分音符入門 (3/4拍子)', timeSig:3, bpm:76,
-    patterns: [
-      [{t:'q'},{t:'e'},{t:'e'},{t:'q'}],
-      [{t:'e'},{t:'e'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'q'},{t:'e'},{t:'e'}],
-      [{t:'e'},{t:'e'},{t:'e'},{t:'e'},{t:'q'}],
-    ]
-  },
-  {
-    id:4, name:'Lv.4', desc:'八分音符 + 休符 (4/4)', timeSig:4, bpm:80,
-    patterns: [
-      [{t:'q'},{t:'e'},{t:'e'},{t:'er'},{t:'e'},{t:'q'}],
-      [{t:'e'},{t:'e'},{t:'er'},{t:'e'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'er'},{t:'e'},{t:'e'},{t:'e'},{t:'q'}],
-      [{t:'e'},{t:'er'},{t:'e'},{t:'e'},{t:'er'},{t:'e'},{t:'q'}],
-    ]
-  },
-  {
-    id:5, name:'Lv.5', desc:'シンコペーション基礎', timeSig:4, bpm:84,
-    patterns: [
-      [{t:'e'},{t:'q.'},{t:'e'},{t:'q'}],  // syncopation
-      [{t:'q'},{t:'e'},{t:'q.'},{t:'e'}],
-      [{t:'e'},{t:'q'},{t:'e'},{t:'h'}],
-      [{t:'q.'},{t:'e'},{t:'q.'},{t:'e'}],
-    ]
-  },
-  {
-    id:6, name:'Lv.6', desc:'十六分音符入門', timeSig:4, bpm:80,
-    patterns: [
-      [{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'q'},{t:'s'},{t:'s'},{t:'e'},{t:'q'}],
-      [{t:'s'},{t:'s'},{t:'e'},{t:'s'},{t:'s'},{t:'e'},{t:'q'}],
-    ]
-  },
-  {
-    id:7, name:'Lv.7', desc:'十六分 + 休符', timeSig:4, bpm:84,
-    patterns: [
-      [{t:'sr'},{t:'s'},{t:'s'},{t:'s'},{t:'q'},{t:'e'},{t:'e'},{t:'q'}],
-      [{t:'s'},{t:'s'},{t:'sr'},{t:'s'},{t:'e'},{t:'e'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'sr'},{t:'s'},{t:'s'},{t:'s'},{t:'e'},{t:'e'},{t:'q'}],
-      [{t:'s'},{t:'sr'},{t:'s'},{t:'sr'},{t:'q'},{t:'q'},{t:'q'}],
-    ]
-  },
-  {
-    id:8, name:'Lv.8', desc:'三連符', timeSig:4, bpm:80,
-    patterns: [
-      [{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'q'}],
-      [{t:'q'},{t:'q'},{t:'t'},{t:'t'},{t:'t'},{t:'q'}],
-      [{t:'t'},{t:'t'},{t:'t'},{t:'t'},{t:'t'},{t:'t'},{t:'q'}],
-    ]
-  },
-  {
-    id:9, name:'Lv.9', desc:'複合リズム', timeSig:4, bpm:88,
-    patterns: [
-      // e(0.5)+t*3(1)+s*4(1)+e(0.5)+q(1) = 4.0拍
-      [{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'e'},{t:'q'}],
-      // q(1)+t*3(1)+s*4(1)+q(1) = 4.0拍
-      [{t:'q'},{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'}],
-      // t*3(1)+e(0.5)+e(0.5)+s*4(1)+q(1) = 4.0拍
-      [{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'}],
-      // e(0.5)+e(0.5)+t*3(1)+e(0.5)+e(0.5)+q(1) = 4.0拍
-      [{t:'e'},{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'q'}],
-    ]
-  },
-  {
-    id:10, name:'Lv.10', desc:'上級・5拍子', timeSig:5, bpm:88,
-    patterns: [
-      // q(1)+e+e(1)+t*3(1)+q(1)+q(1) = 5拍
-      [{t:'q'},{t:'e'},{t:'e'},{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'q'}],
-      // t*3(1)+s*4(1)+q(1)+e+e(1)+q(1) = 5拍
-      [{t:'t'},{t:'t'},{t:'t'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'q'},{t:'e'},{t:'e'},{t:'q'}],
-      // e+e(1)+s*4(1)+t*3(1)+e+e(1)+q(1) = 5拍
-      [{t:'e'},{t:'e'},{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'e'},{t:'e'},{t:'q'}],
-      // s*4(1)+t*3(1)+q(1)+e+e(1)+q(1) = 5拍
-      [{t:'s'},{t:'s'},{t:'s'},{t:'s'},{t:'t'},{t:'t'},{t:'t'},{t:'q'},{t:'e'},{t:'e'},{t:'q'}],
-    ]
-  },
+  { id:1,  name:'Lv.1',  desc:'四分音符・四分休符',       timeSig:4, bpm:70  },
+  { id:2,  name:'Lv.2',  desc:'二分音符',                  timeSig:4, bpm:72  },
+  { id:3,  name:'Lv.3',  desc:'八分音符入門 (3/4)',         timeSig:3, bpm:76  },
+  { id:4,  name:'Lv.4',  desc:'八分音符 + 休符 (4/4)',      timeSig:4, bpm:80  },
+  { id:5,  name:'Lv.5',  desc:'付点・シンコペーション',     timeSig:4, bpm:84  },
+  { id:6,  name:'Lv.6',  desc:'十六分音符入門',             timeSig:4, bpm:80  },
+  { id:7,  name:'Lv.7',  desc:'十六分 + 休符',              timeSig:4, bpm:84  },
+  { id:8,  name:'Lv.8',  desc:'三連符',                     timeSig:4, bpm:80  },
+  { id:9,  name:'Lv.9',  desc:'複合リズム',                 timeSig:4, bpm:88  },
+  { id:10, name:'Lv.10', desc:'上級・5拍子',                timeSig:5, bpm:88  },
 ];
 
 // Note durations in beats
-const NOTE_DUR = { q:1, h:2, w:4, 'q.':1.5, e:0.5, 'e.':0.75, er:0.5, s:0.25, sr:0.25, t:1/3 };
+const NOTE_DUR    = { q:1, h:2, w:4, 'q.':1.5, e:0.5, 'e.':0.75, er:0.5, s:0.25, sr:0.25, t:1/3 };
 const NOTE_IS_REST = { er:true, sr:true, r:true };
+
+// ── ランダムパターン生成 ──────────────────────────────────────
+// 拍数を満たすまで「使えるセル」からランダムに選んで並べる
+function generatePattern(levelIdx) {
+  const lv = LEVELS[levelIdx];
+  const total = lv.timeSig; // 何拍分作るか
+
+  // レベルごとに使える「セル（1拍単位のブロック）」を定義
+  // 各セルは {notes:[...], beats:N} の形
+  const cells = makeCells(levelIdx);
+
+  // 拍数ぴったりになるまでランダムに選んで積む
+  // 最大100試行して見つからなければ安全パターンにフォールバック
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const result = [];
+    let remaining = total;
+    let ok = true;
+
+    while (remaining > 0.001) {
+      const usable = cells.filter(c => c.beats <= remaining + 0.001);
+      if (!usable.length) { ok = false; break; }
+      // 使える中からランダム選択（小さいセルを少し重み付け）
+      const pick = usable[Math.floor(Math.random() * usable.length)];
+      result.push(...pick.notes);
+      remaining -= pick.beats;
+    }
+    if (ok && Math.abs(remaining) < 0.01) {
+      // 全音符だけにならないように（最低1つ実音が必要）
+      if (result.some(n => !NOTE_IS_REST[n.t] && n.t !== 'r')) return result;
+    }
+  }
+  // フォールバック: 全部四分音符
+  return Array(total).fill(null).map(() => ({t:'q'}));
+}
+
+function makeCells(levelIdx) {
+  const id = levelIdx + 1;
+  // 共通セル（全レベルで使える）
+  const base = [];
+
+  if (id === 1) {
+    // 四分音符・四分休符のみ
+    return [
+      { notes:[{t:'q'}],          beats:1 },
+      { notes:[{t:'q'}],          beats:1 }, // 音符を多めに
+      { notes:[{t:'q'}],          beats:1 },
+      { notes:[{t:'r'}],          beats:1 }, // 四分休符
+    ];
+  }
+
+  if (id === 2) {
+    return [
+      { notes:[{t:'q'}],          beats:1 },
+      { notes:[{t:'q'}],          beats:1 },
+      { notes:[{t:'h'}],          beats:2 },
+      { notes:[{t:'h'}],          beats:2 },
+      { notes:[{t:'r'}],          beats:1 },
+    ];
+  }
+
+  if (id === 3) {
+    // 3/4拍子: 3拍
+    return [
+      { notes:[{t:'q'}],             beats:1 },
+      { notes:[{t:'q'}],             beats:1 },
+      { notes:[{t:'e'},{t:'e'}],     beats:1 }, // 八分×2=1拍
+      { notes:[{t:'e'},{t:'e'}],     beats:1 },
+      { notes:[{t:'h'}],             beats:2 },
+      { notes:[{t:'r'}],             beats:1 },
+    ];
+  }
+
+  if (id === 4) {
+    return [
+      { notes:[{t:'q'}],                    beats:1 },
+      { notes:[{t:'q'}],                    beats:1 },
+      { notes:[{t:'e'},{t:'e'}],            beats:1 },
+      { notes:[{t:'e'},{t:'e'}],            beats:1 },
+      { notes:[{t:'er'},{t:'e'}],           beats:1 }, // 八分休+八分
+      { notes:[{t:'e'},{t:'er'}],           beats:1 }, // 八分+八分休
+      { notes:[{t:'r'}],                    beats:1 },
+      { notes:[{t:'h'}],                    beats:2 },
+    ];
+  }
+
+  if (id === 5) {
+    return [
+      { notes:[{t:'q'}],                    beats:1 },
+      { notes:[{t:'q'}],                    beats:1 },
+      { notes:[{t:'e'},{t:'e'}],            beats:1 },
+      { notes:[{t:'q.'}],                   beats:1.5 },
+      { notes:[{t:'q.'}],                   beats:1.5 },
+      { notes:[{t:'e'}],                    beats:0.5 },
+      { notes:[{t:'er'},{t:'e'}],           beats:1 },
+      { notes:[{t:'h'}],                    beats:2 },
+      { notes:[{t:'r'}],                    beats:1 },
+    ];
+  }
+
+  if (id === 6) {
+    return [
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 }, // 十六分×4=1拍
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'e'}],               beats:1 }, // 十六+十六+八=1拍
+      { notes:[{t:'e'},{t:'s'},{t:'s'}],               beats:1 },
+      { notes:[{t:'r'}],                               beats:1 },
+      { notes:[{t:'h'}],                               beats:2 },
+    ];
+  }
+
+  if (id === 7) {
+    return [
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
+      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}],      beats:1 }, // 十六休+十六×3
+      { notes:[{t:'s'},{t:'sr'},{t:'s'},{t:'s'}],      beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'sr'},{t:'s'}],      beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'sr'}],      beats:1 },
+      { notes:[{t:'sr'},{t:'s'},{t:'e'}],              beats:1 },
+      { notes:[{t:'e'},{t:'sr'},{t:'s'}],              beats:1 },
+      { notes:[{t:'er'},{t:'e'}],                      beats:1 },
+      { notes:[{t:'r'}],                               beats:1 },
+    ];
+  }
+
+  if (id === 8) {
+    return [
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 }, // 八分三連=1拍
+      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
+      { notes:[{t:'r'}],                               beats:1 },
+      { notes:[{t:'h'}],                               beats:2 },
+    ];
+  }
+
+  if (id === 9) {
+    return [
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
+      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}],      beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'e'}],               beats:1 },
+      { notes:[{t:'e'},{t:'s'},{t:'s'}],               beats:1 },
+      { notes:[{t:'er'},{t:'e'}],                      beats:1 },
+      { notes:[{t:'q.'}],                              beats:1.5 },
+      { notes:[{t:'e'}],                               beats:0.5 },
+      { notes:[{t:'r'}],                               beats:1 },
+      { notes:[{t:'h'}],                               beats:2 },
+    ];
+  }
+
+  if (id === 10) {
+    // 5拍子: より複雑な組み合わせ
+    return [
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'q'}],                               beats:1 },
+      { notes:[{t:'e'},{t:'e'}],                       beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}],       beats:1 },
+      { notes:[{t:'t'},{t:'t'},{t:'t'}],               beats:1 },
+      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}],      beats:1 },
+      { notes:[{t:'s'},{t:'s'},{t:'e'}],               beats:1 },
+      { notes:[{t:'e'},{t:'s'},{t:'s'}],               beats:1 },
+      { notes:[{t:'er'},{t:'e'}],                      beats:1 },
+      { notes:[{t:'q.'}],                              beats:1.5 },
+      { notes:[{t:'e'}],                               beats:0.5 },
+      { notes:[{t:'r'}],                               beats:1 },
+      { notes:[{t:'h'}],                               beats:2 },
+    ];
+  }
+
+  return [{ notes:[{t:'q'}], beats:1 }];
+}
+
+// パターンをキー文字列に変換（苦手保存・重複排除用）
+function patternToKey(pattern) {
+  return pattern.map(n => n.t).join(',');
+}
+
+// 現在のパターン（ランダム生成 or 苦手パターン）
+let currentGeneratedPattern = null;
+
+function getPattern() {
+  if (weakPatternMode && currentWeakPattern) return currentWeakPattern;
+  if (!currentGeneratedPattern) currentGeneratedPattern = generatePattern(currentLevel);
+  return currentGeneratedPattern;
+}
+
+function refreshPattern() {
+  currentGeneratedPattern = generatePattern(currentLevel);
+}
 
 // ============================================================
 // STATE
 // ============================================================
-let currentLevel = 0; // index into LEVELS
-let currentPatternIdx = 0;
+let currentLevel = 0;
 let bpm = 70;
-let gameState = 'idle'; // idle | countdown | playing | result
-let expectedBeats = []; // { timeMs, idx }
-let tapLog = [];
-let gameStartTime = 0;
 let gameTimer = null;
 let listenTimer = null;
 let totalScore = 0;
 let streak = 0;
 let xp = 0;
-// localStorageからクリア済みレベルを復元
 let unlockedLevel = parseInt(localStorage.getItem('snare_unlockedLevel') || '1', 10);
-let patternResults = []; // per-note result: 'p','g','e','l','m'
+let patternResults = [];
 let audioCtx = null;
+let expectedBeats = [];
+let tapLog = [];
+
+// 苦手パターン
+let weakPatterns = JSON.parse(localStorage.getItem('snare_weakPatterns') || '[]');
+// 苦手パターン練習モード
+let weakPatternMode = false;
+let currentWeakPattern = null;
+let weakPatternIndex = 0;
+
+// セッション管理
+let sessionPhase = 'idle';
+let patternStartAC = 0;
+let patternStartPN = 0;
+let countdownTimer = null;
 
 // ============================================================
 // AUDIO
@@ -1089,14 +1227,6 @@ function buildExpectedBeats() {
   return beats;
 }
 
-let sessionPhase = 'idle';
-let countdownTimer = null;
-
-// ★ 核心：AudioContextの時刻を基準にすべてを管理
-// patternStartAC = パターン1拍目がAudioContext上で鳴る時刻 (ac.currentTime単位)
-// patternStartPN = 同じ瞬間のperformance.now() (ms単位) ← タップ判定に使用
-let patternStartAC = 0;
-let patternStartPN = 0;
 
 function startSession() {
   if (sessionPhase === 'playing' || sessionPhase === 'countdown') {
@@ -1300,9 +1430,11 @@ function evalSession() {
     localStorage.setItem('snare_unlockedLevel', unlockedLevel);
     renderLevelPills();
   }
+  updateWeakBtn();
 
   updateXP();
   document.getElementById('scoreVal').textContent = totalScore;
+  document.getElementById('weakModeBanner').style.display = weakPatternMode ? 'block' : 'none';
   document.getElementById('streakBadge').textContent = streak > 1 ? `🔥${streak}連続` : '';
   document.getElementById('rP').textContent = p;
   document.getElementById('rG').textContent = g;
@@ -1360,15 +1492,131 @@ function listenPattern() {
 // PATTERN NAVIGATION
 // ============================================================
 function nextPattern() {
-  const lv = LEVELS[currentLevel];
-  currentPatternIdx = (currentPatternIdx + 1) % lv.patterns.length;
+  if (weakPatternMode) {
+    weakPatternIndex = (weakPatternIndex + 1) % weakPatterns.length;
+    currentWeakPattern = weakPatterns[weakPatternIndex] ? weakPatterns[weakPatternIndex].pattern : null;
+    updateWeakModeLabel();
+  } else {
+    refreshPattern();
+  }
   patternResults = [];
   tapLog = [];
   document.getElementById('dotsRow').innerHTML = '';
   document.getElementById('resultCard').style.display = 'none';
-  document.getElementById('patNumLabel').textContent = `パターン #${currentPatternIdx + 1}`;
+  document.getElementById('weakBtn') && updateWeakBtn();
   showFeedback('譜面を読んでスタート', 'ready', '');
   drawStaff();
+}
+
+function updateWeakModeLabel() {
+  const lbl = document.getElementById('patNumLabel');
+  if (weakPatternMode) {
+    lbl.textContent = `苦手 ${weakPatternIndex+1}/${weakPatterns.length}`;
+  } else {
+    lbl.textContent = 'ランダム';
+  }
+}
+
+function updateWeakBtn() {
+  const btn = document.getElementById('weakBtn');
+  if (!btn) return;
+  const key = patternToKey(getPattern());
+  const isWeak = weakPatterns.some(w => w.key === key);
+  btn.textContent = isWeak ? '★ 苦手登録済' : '☆ 苦手に追加';
+  btn.style.borderColor = isWeak ? 'var(--gold)' : 'var(--border)';
+  btn.style.color = isWeak ? 'var(--gold)' : 'var(--muted)';
+}
+
+function toggleWeak() {
+  const pattern = getPattern();
+  const key = patternToKey(pattern);
+  const idx = weakPatterns.findIndex(w => w.key === key);
+  const lv = LEVELS[currentLevel];
+  if (idx >= 0) {
+    weakPatterns.splice(idx, 1);
+  } else {
+    weakPatterns.push({ key, pattern: JSON.parse(JSON.stringify(pattern)), levelId: lv.id, levelName: lv.name, addedAt: Date.now() });
+  }
+  localStorage.setItem('snare_weakPatterns', JSON.stringify(weakPatterns));
+  updateWeakBtn();
+  renderWeakList();
+}
+
+function enterWeakMode() {
+  if (!weakPatterns.length) { alert('苦手パターンがまだありません'); return; }
+  weakPatternMode = true;
+  weakPatternIndex = 0;
+  currentWeakPattern = weakPatterns[0].pattern;
+  // レベルを合わせる
+  const lvIdx = LEVELS.findIndex(l => l.id === weakPatterns[0].levelId);
+  if (lvIdx >= 0) selectLevel(lvIdx, true);
+  patternResults = [];
+  tapLog = [];
+  document.getElementById('dotsRow').innerHTML = '';
+  document.getElementById('resultCard').style.display = 'none';
+  updateWeakModeLabel();
+  updateWeakBtn();
+  showFeedback('苦手パターン練習', 'ready', '');
+  drawStaff();
+  // 苦手パネルを閉じる
+  document.getElementById('weakPanel').style.display = 'none';
+}
+
+function exitWeakMode() {
+  weakPatternMode = false;
+  currentWeakPattern = null;
+  refreshPattern();
+  patternResults = [];
+  tapLog = [];
+  document.getElementById('dotsRow').innerHTML = '';
+  document.getElementById('resultCard').style.display = 'none';
+  updateWeakModeLabel();
+  updateWeakBtn();
+  showFeedback('譜面を読んでスタート', 'ready', '');
+  drawStaff();
+}
+
+function renderWeakList() {
+  const list = document.getElementById('weakList');
+  if (!list) return;
+  if (!weakPatterns.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px;">苦手パターンはまだありません</div>';
+    return;
+  }
+  list.innerHTML = weakPatterns.map((w, i) => `
+    <div class="weak-item" onclick="previewWeak(${i})">
+      <div class="weak-item-left">
+        <span class="weak-lv-badge">${w.levelName}</span>
+        <span class="weak-notes">${w.key.replace(/,/g,' ')}</span>
+      </div>
+      <button class="weak-del" onclick="event.stopPropagation();deleteWeak(${i})">✕</button>
+    </div>
+  `).join('');
+}
+
+function previewWeak(i) {
+  weakPatternMode = true;
+  weakPatternIndex = i;
+  currentWeakPattern = weakPatterns[i].pattern;
+  const lvIdx = LEVELS.findIndex(l => l.id === weakPatterns[i].levelId);
+  if (lvIdx >= 0) selectLevel(lvIdx, true);
+  patternResults = [];
+  tapLog = [];
+  document.getElementById('dotsRow').innerHTML = '';
+  document.getElementById('resultCard').style.display = 'none';
+  updateWeakModeLabel();
+  updateWeakBtn();
+  showFeedback('苦手パターン練習', 'ready', '');
+  drawStaff();
+  document.getElementById('weakPanel').style.display = 'none';
+}
+
+function deleteWeak(i) {
+  weakPatterns.splice(i, 1);
+  localStorage.setItem('snare_weakPatterns', JSON.stringify(weakPatterns));
+  renderWeakList();
+  updateWeakBtn();
+  if (weakPatternMode && weakPatterns.length === 0) exitWeakMode();
 }
 
 // ============================================================
@@ -1387,10 +1635,10 @@ function renderLevelPills() {
   });
 }
 
-function selectLevel(i) {
+function selectLevel(i, keepWeakMode = false) {
   if (LEVELS[i].id > unlockedLevel) return;
   currentLevel = i;
-  currentPatternIdx = 0;
+  if (!keepWeakMode) { weakPatternMode = false; currentWeakPattern = null; refreshPattern(); }
   patternResults = []; tapLog = [];
   const lv = LEVELS[i];
   bpm = lv.bpm;
@@ -1400,9 +1648,10 @@ function selectLevel(i) {
   document.getElementById('levelChip').textContent = lv.name;
   document.getElementById('levelDesc').textContent = lv.desc;
   document.getElementById('timeSigLabel').textContent = `${lv.timeSig}/4拍子`;
-  document.getElementById('patNumLabel').textContent = 'パターン #1';
   document.getElementById('dotsRow').innerHTML = '';
   document.getElementById('resultCard').style.display = 'none';
+  updateWeakModeLabel();
+  updateWeakBtn && updateWeakBtn();
   showFeedback('譜面を読んでスタート', 'ready', '');
   renderLevelPills();
   drawStaff();
@@ -1416,9 +1665,20 @@ function updateXP() {
 // ============================================================
 // INIT
 // ============================================================
+function toggleWeakPanel() {
+  const panel = document.getElementById('weakPanel');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) renderWeakList();
+}
+
 window.addEventListener('load', () => {
   renderLevelPills();
+  refreshPattern();
   drawStaff();
+  updateWeakBtn();
+  renderWeakList();
+  updateWeakModeLabel();
 });
 
 // デバッグ用: localStorage リセット（コンソールから呼べる）
