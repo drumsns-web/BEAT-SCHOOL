@@ -849,11 +849,10 @@ function drawStaff() {
 
   // Draw notes
   beats.forEach((b, i) => {
-    const nx = noteAreaStart + (b.dur === 0 ? beats.slice(0,i).reduce((s,x)=>s+x.dur,0) : beats.slice(0,i).reduce((s,x)=>s+x.dur,0) + 0) * pxPerBeat + pxPerBeat * beats.slice(0,i).reduce((s,x)=>s+x.dur,0);
-    // recalc correctly
-    const offsetBeats = beats.slice(0,i).reduce((s,x)=>s+x.dur,0);
-    const x = noteAreaStart + offsetBeats * pxPerBeat + pxPerBeat * b.dur / 2;
-    const headX = noteAreaStart + offsetBeats * pxPerBeat + Math.min(pxPerBeat * b.dur * 0.3, 12);
+    const offsetBeats = beats.slice(0, i).reduce((s, x) => s + x.dur, 0);
+    // headX: note頭の中心X。各音符の左端から少し右に配置
+    const cellLeft = noteAreaStart + offsetBeats * pxPerBeat;
+    const headX = cellLeft + Math.min(pxPerBeat * 0.25, 14);
 
     window._notePositions.push({ x: headX, timeMs: b.timeMs });
 
@@ -870,21 +869,22 @@ function drawStaff() {
       const filled = b.type !== 'h' && b.type !== 'w';
       drawNoteHead(c, headX, staffY, filled, col, b.type==='s'||b.type==='t' ? 5 : 6);
 
-      // Stem (upward) for non-whole
+      // Stem (upward): stems go up from right side of notehead
       if (b.type !== 'w') {
-        const stemX = headX + 5;
+        const rx = (b.type === 's' || b.type === 't') ? 5 : 6;
+        const stemX = headX + rx;
         c.strokeStyle = col;
         c.lineWidth = 1.5;
         c.beginPath();
-        c.moveTo(stemX, staffY - 4);
+        c.moveTo(stemX, staffY - rx * 0.75);
         c.lineTo(stemX, staffY - 30);
         c.stroke();
 
-        // Flags for non-beamed
+        // Flags for non-beamed notes
         if (!beamedIdx.has(i)) {
-          if (b.type === 'e') drawFlag(c, stemX, staffY-30, 1, col);
-          if (b.type === 's') drawFlag(c, stemX, staffY-30, 2, col);
-          if (b.type === 't') drawFlag(c, stemX, staffY-30, 2, col); // triplet shown as two flags
+          if (b.type === 'e') drawFlag(c, stemX, staffY - 30, 1, col);
+          if (b.type === 's') drawFlag(c, stemX, staffY - 30, 2, col);
+          if (b.type === 't') drawFlag(c, stemX, staffY - 30, 2, col);
         }
       }
 
@@ -927,21 +927,30 @@ function drawStaff() {
   // Draw beams
   beamGroups.forEach(g => {
     if (g.notes.length < 2) return;
-    const first = beats[g.notes[0]];
-    const last = beats[g.notes[g.notes.length-1]];
-    const x1 = noteAreaStart + beats.slice(0,g.notes[0]).reduce((s,x)=>s+x.dur,0)*pxPerBeat + 5;
-    const x2 = noteAreaStart + beats.slice(0,g.notes[g.notes.length-1]).reduce((s,x)=>s+x.dur,0)*pxPerBeat + 5;
+    const getHeadX = idx => {
+      const off = beats.slice(0, idx).reduce((s, x) => s + x.dur, 0);
+      return noteAreaStart + off * pxPerBeat + Math.min(pxPerBeat * 0.25, 14);
+    };
+    const x1 = getHeadX(g.notes[0]);
+    const x2 = getHeadX(g.notes[g.notes.length - 1]);
     const beamY = staffY - 30;
-    // Primary beam
     const bCol = patternResults[g.notes[0]] ? NOTE_COLORS[patternResults[g.notes[0]]] : '#1a1408';
+    // Primary beam (eighth)
     c.strokeStyle = bCol;
-    c.lineWidth = 3;
-    c.beginPath(); c.moveTo(x1, beamY); c.lineTo(x2, beamY); c.stroke();
-    // Secondary beam for sixteenth / triplet
-    if (g.type==='s' || g.type==='t') {
-      c.lineWidth = 3;
-      c.beginPath(); c.moveTo(x1, beamY+5); c.lineTo(x2, beamY+5); c.stroke();
+    c.lineWidth = 4;
+    c.lineCap = 'square';
+    c.beginPath();
+    c.moveTo(x1 + (g.type === 's' || g.type === 't' ? 5 : 6), beamY);
+    c.lineTo(x2 + (g.type === 's' || g.type === 't' ? 5 : 6), beamY);
+    c.stroke();
+    // Secondary beam (sixteenth/triplet)
+    if (g.type === 's' || g.type === 't') {
+      c.beginPath();
+      c.moveTo(x1 + 5, beamY + 5);
+      c.lineTo(x2 + 5, beamY + 5);
+      c.stroke();
     }
+    c.lineCap = 'butt';
     c.lineWidth = 1;
   });
 }
@@ -991,12 +1000,15 @@ function setBpm(v) {
 function buildExpectedBeats() {
   const pattern = getPattern();
   const secPerBeat = 60 / bpm;
+  // patternStartPN は halfBeat分早く設定されているので、
+  // expectedBeatsのtimeMsも同じ分だけずらして基準を合わせる
+  const halfBeatMs = secPerBeat * 0.5 * 1000;
   let timeSec = 0;
   const beats = [];
   pattern.forEach((note, i) => {
     const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
     const dur = NOTE_DUR[note.t] || 1;
-    if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000, idx: i, dur });
+    if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000 + halfBeatMs, idx: i, dur });
     timeSec += dur * secPerBeat;
   });
   return beats;
@@ -1040,7 +1052,10 @@ function startSession() {
 
   // パターン開始 = 4拍目の次の拍
   patternStartAC = countStartAC + countBeats * secPerBeat;
-  patternStartPN = pnNow + (patternStartAC - acNow) * 1000;
+  // setTimeoutの遅延誤差でbeginPlayが少し遅れるため、
+  // 半拍分早くbaselineを設定して1拍目頭を確実に受け付ける
+  const halfBeatMs = secPerBeat * 0.5 * 1000;
+  patternStartPN = pnNow + (patternStartAC - acNow) * 1000 - halfBeatMs;
 
   // UI数字表示（音と同タイミング）
   const countStartDelay = (countStartAC - acNow) * 1000;
