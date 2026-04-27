@@ -1093,8 +1093,9 @@ function findBeamGroups(beats, tripletGroups) {
       } else { i++; }
       continue;
     }
-    // e or s: 連続する同種をまとめる
+    // e or s: 連続する同種をまとめる（連符タイプは除外）
     const type = b.type; // 'e' or 's'
+    if (type !== 'e' && type !== 's') { i++; continue; }
     const start = i;
     while (i < beats.length && beats[i].type === type && !beats[i].isRest) i++;
     if (i - start >= 2) {
@@ -1109,7 +1110,7 @@ function drawStaff() {
   const canvas  = document.getElementById('staffCanvas');
   const wrap    = document.getElementById('sheetWrap');
   const W = wrap.clientWidth - 20;
-  const H = 150;
+  const H = 180;
   const DPR = window.devicePixelRatio || 2;
   canvas.width  = W * DPR;
   canvas.height = H * DPR;
@@ -1126,12 +1127,12 @@ function drawStaff() {
 
   // ── レイアウト定数 ──────────────────────────────────
   // 一線パーカッション譜: 音符頭は線の上、符尾は上向き（スネア標準）
-  const lineY     = 90;   // スタッフ線Y（下めに置いて上に余白）
+  const lineY     = 120;  // スタッフ線Y（下めに置いて上に余白を確保）
   const headAbove = 10;   // 音符頭中心は lineY - headAbove
   const noteY     = lineY - headAbove;  // 音符頭中心
   const stemTop   = noteY - 34;         // 符尾の上端（上向き）
   const beamY     = stemTop + 4;        // 一次ビームY（符尾の上端近く）
-  const bracketY  = beamY - 14;        // 連符括弧Y（ビームのさらに上）
+  const bracketY  = beamY - 18;        // 連符括弧Y（ビームの上、余白あり）
   const flagStartY = stemTop;           // フラッグ起点（上端）
 
   const noteAreaStart = 58;
