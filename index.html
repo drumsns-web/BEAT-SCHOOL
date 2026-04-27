@@ -1260,17 +1260,20 @@ function drawStaff() {
     }
     c.lineCap = 'butt'; c.lineWidth = 1;
 
-    // 三連符括弧（ビームの下）
-    if (g.type === 't') {
-      drawTripletBracket(c, getHeadX(nx[0]), getHeadX(nx[nx.length-1]), bracketY);
+    // 連符括弧（t/p5/p7/p9 すべてに数字付き括弧を描く）
+    if (g.type === 't' || g.type === 'p5' || g.type === 'p7' || g.type === 'p9') {
+      const num = g.tupletNum || (g.type === 't' ? 3 : g.type === 'p5' ? 5 : g.type === 'p7' ? 7 : 9);
+      drawTripletBracket(c, getHeadX(nx[0]), getHeadX(nx[nx.length-1]), bracketY, num);
     }
   });
 
-  // 単独三連符（ビームグループ外のt）にも括弧
+  // 単独の連符（ビームグループ外）にも括弧
   beats.forEach((b, i) => {
-    if (b.type !== 't' || b.isRest || beamedSet.has(i)) return;
+    if (b.isRest || beamedSet.has(i)) return;
+    if (b.type !== 't' && b.type !== 'p5' && b.type !== 'p7' && b.type !== 'p9') return;
     const hx = getHeadX(i);
-    drawTripletBracket(c, hx - 5, hx + 10, bracketY);
+    const num = b.type === 't' ? 3 : b.type === 'p5' ? 5 : b.type === 'p7' ? 7 : 9;
+    drawTripletBracket(c, hx - 5, hx + 10, bracketY, num);
   });
 }
 
