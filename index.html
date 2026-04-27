@@ -1072,7 +1072,12 @@ function findTripletGroups(beats) {
 // ビームグループを検出
 function findBeamGroups(beats, tripletGroups) {
   const tripletStarts = new Set(tripletGroups.map(g => g.start));
-  const tripletAll    = new Set(tripletGroups.flatMap(g => [g.start, g.start+1, g.end]));
+  // 全インデックスを登録（5連符は5個分、7連符は7個分すべて）
+  const tripletAll = new Set(
+    tripletGroups.flatMap(g =>
+      Array.from({length: g.end - g.start + 1}, (_, k) => g.start + k)
+    )
+  );
   const groups = [];
   let i = 0;
   while (i < beats.length) {
