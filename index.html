@@ -1131,7 +1131,7 @@ function drawStaff() {
   const noteY     = lineY - headAbove;  // 音符頭中心
   const stemTop   = noteY - 34;         // 符尾の上端（上向き）
   const beamY     = stemTop + 4;        // 一次ビームY（符尾の上端近く）
-  const bracketY  = stemTop - 16;       // 三連符括弧Y（ビームの上）
+  const bracketY  = beamY - 14;        // 連符括弧Y（ビームのさらに上）
   const flagStartY = stemTop;           // フラッグ起点（上端）
 
   const noteAreaStart = 58;
@@ -1307,18 +1307,18 @@ function drawTripletBracket(c, x1, x2, y, num) {
   const gap   = textW / 2 + 3;
   c.strokeStyle = '#333';
   c.lineWidth   = 1.2;
-  // 左: 縦→横
+  // 左: 縦→横（下向きに開口）
   c.beginPath();
-  c.moveTo(x1, y - 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
+  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
   c.stroke();
   // 右: 横→縦
   c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y - 6);
+  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
   c.stroke();
-  // 数字
+  // 数字（括弧の上）
   c.fillStyle = '#222';
   c.textAlign = 'center';
-  c.fillText(numStr, mid, y + 4);
+  c.fillText(numStr, mid, y - 2);
 }
 
 function drawRest(c, type, x, y, col) {
