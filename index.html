@@ -887,7 +887,6 @@ function makeCells(levelIdx) {
       { notes:[{t:'e'},{t:'e'}] },
       { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
       { notes:[{t:'t'},{t:'t'},{t:'t'}] },                           // 三連符 (1拍)
-      { notes:[{t:'t'},{t:'t'},{t:'t'},{t:'t'},{t:'t'},{t:'t'}] },  // 六連符 (2拍)
       { notes:[{t:'p5'},{t:'p5'},{t:'p5'},{t:'p5'},{t:'p5'}] },     // 五連符 (1拍)
       { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] },
       { notes:[{t:'s'},{t:'s'},{t:'e'}] },
@@ -1037,41 +1036,34 @@ function findTripletGroups(beats) {
   const groups = [];
   let i = 0;
 
-  // タイプごとのグループサイズと表示数字
-  const TUPLET_RULES = {
-    't':  [6, 3],   // t×6=六連符, t×3=三連符
-    'p5': [5],      // p5×5=五連符
-    'p7': [7],      // p7×7=七連符
-    'p9': [9],      // p9×9=九連符
+  // タイプごとの「1グループのサイズ」を定義
+  // tは必ず3個で1グループ（六連符はt×3+t×3の2グループ）
+  const TUPLET_SIZE = {
+    't':  3,  // 三連符: 必ず3個で1グループ
+    'p5': 5,  // 五連符: 5個で1グループ
+    'p7': 7,  // 七連符: 7個で1グループ
+    'p9': 9,  // 九連符: 9個で1グループ
   };
 
   while (i < beats.length) {
     const type = beats[i].type;
-    if (!TUPLET_RULES[type] || beats[i].isRest) { i++; continue; }
+    if (!(type in TUPLET_SIZE) || beats[i].isRest) { i++; continue; }
 
+    const groupSize = TUPLET_SIZE[type];
     const start = i;
-    const rules = TUPLET_RULES[type];
-    const maxCount = rules[0]; // 最大グループサイズ
 
-    // 連続する同タイプをカウント
+    // groupSize個だけ進める
     let cnt = 0;
-    while (i < beats.length && beats[i].type === type && !beats[i].isRest && cnt < maxCount) {
+    while (i < beats.length && beats[i].type === type && !beats[i].isRest && cnt < groupSize) {
       i++; cnt++;
     }
 
-    // ぴったりグループサイズなら登録
-    if (cnt === rules[0]) {
-      groups.push({ start, end: i - 1, count: rules[0], num: rules[0] });
-    } else if (rules[1] && cnt === rules[1]) {
-      // 3連符など小さいグループ
-      groups.push({ start, end: i - 1, count: rules[1], num: rules[1] });
-    } else if (rules[1] && cnt > rules[1] && cnt % rules[1] === 0) {
-      // 3の倍数なら複数グループ
-      for (let g = 0; g < cnt / rules[1]; g++) {
-        groups.push({ start: start + g*rules[1], end: start + g*rules[1] + rules[1] - 1, count: rules[1], num: rules[1] });
-      }
+    if (cnt === groupSize) {
+      // ぴったりgroupSize個 → グループ登録
+      groups.push({ start, end: start + groupSize - 1, count: groupSize, num: groupSize });
     } else {
-      i = start + 1; // 不完全なグループは単独扱い
+      // 不完全なグループは単独扱いに戻す
+      i = start + 1;
     }
   }
   return groups;
