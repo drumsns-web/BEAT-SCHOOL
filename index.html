@@ -465,6 +465,124 @@ input[type=range]::-webkit-slider-thumb {
   text-align: right;
   flex-shrink: 0;
 }
+
+  /* ===== マイク入力モード ===== */
+  .mic-section {
+    margin-bottom: 10px;
+  }
+  .input-mode-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .mode-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 14px 8px;
+    background: white;
+    border: 3px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    box-shadow: 0 3px 0 var(--border);
+    -webkit-user-select: none;
+    user-select: none;
+    min-height: 90px;
+  }
+  .mode-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--border);
+  }
+  .mode-btn.active {
+    background: var(--ink);
+    border-color: var(--ink);
+    box-shadow: 0 3px 0 #000;
+    color: white;
+  }
+  .mode-btn.active .mode-desc { color: rgba(255,255,255,0.5); }
+  .mode-icon { font-size: 32px; line-height: 1; }
+  .mode-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .mode-btn.active .mode-label { color: white; }
+  .mode-desc {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--muted);
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .mic-info-box {
+    background: white;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 2px 6px var(--shadow);
+  }
+  .mic-info-box.show { display: flex; }
+  .mic-status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .mic-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.1s;
+  }
+  .mic-dot.on  { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .mic-dot.hit { background: var(--accent);  box-shadow: 0 0 8px var(--accent); }
+  .mic-state-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    flex: 1;
+  }
+  .mic-hit-label {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 3px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.05s;
+  }
+  .mic-hit-label.show { opacity: 1; }
+  .mic-bar-wrap {
+    height: 10px;
+    background: var(--paper2);
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .mic-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 5px;
+    transition: width 0.04s;
+  }
+  .mic-thresh-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+  }
+
 </style>
 </head>
 <body>
@@ -497,32 +615,34 @@ input[type=range]::-webkit-slider-thumb {
 
   <!-- 入力モード -->
   <div class="mic-section">
-    <div class="mic-section-title">— 入力モード —</div>
     <div class="input-mode-row">
-      <div class="mode-btn active" id="modeTap" onclick="setInputMode('tap')">
+      <div class="mode-btn active" id="modeTap" ontouchstart="setInputMode('tap')" onclick="setInputMode('tap')">
         <span class="mode-icon">👆</span>
         <span class="mode-label">TAP</span>
         <span class="mode-desc">画面をタップ</span>
       </div>
-      <div class="mode-btn" id="modeMic" onclick="setInputMode('mic')">
+      <div class="mode-btn" id="modeMic" ontouchstart="setInputMode('mic')" onclick="setInputMode('mic')">
         <span class="mode-icon">🎤</span>
         <span class="mode-label">MIC</span>
         <span class="mode-desc">打音・声で入力</span>
       </div>
     </div>
-    <!-- マイクレベルメーター（MIC時のみ表示） -->
-    <div id="micMeterRow" class="mic-meter-row" style="display:none;">
-      <span class="mic-meter-label">音量</span>
-      <div class="mic-meter-bar">
-        <div class="mic-meter-fill" id="micMeterFill"></div>
+    <!-- MICモード時の情報ボックス -->
+    <div class="mic-info-box" id="micInfoBox">
+      <div class="mic-status-row">
+        <div class="mic-dot" id="micDot"></div>
+        <span class="mic-state-label" id="micStateLabel">マイク起動中...</span>
+        <span class="mic-hit-label" id="micHitLabel">HIT!</span>
       </div>
-      <span class="mic-status" id="micStatus">OFF</span>
-    </div>
-    <!-- 感度スライダー（MIC時のみ表示） -->
-    <div id="micThreshRow" class="mic-thresh-row" style="display:none;">
-      <span>感度</span>
-      <input type="range" id="micThresh" min="5" max="120" value="60" style="flex:1;" oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
-      <span id="micThreshVal">60</span>
+      <div class="mic-bar-wrap">
+        <div class="mic-bar-fill" id="micBarFill"></div>
+      </div>
+      <div class="mic-thresh-row">
+        <span>感度（低←→高）</span>
+        <input type="range" id="micThresh" min="5" max="150" value="60" style="flex:1;"
+          oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
+        <span id="micThreshVal">60</span>
+      </div>
     </div>
   </div>
 
@@ -1246,43 +1366,67 @@ function setInputMode(mode) {
   document.getElementById('tapArea').style.opacity = mode === 'mic' ? '0.35' : '1';
   document.getElementById('tapArea').style.pointerEvents = mode === 'mic' ? 'none' : '';
 
-  const showMic = mode === 'mic';
-  document.getElementById('micThreshRow').style.display = showMic ? 'flex' : 'none';
-  document.getElementById('micMeterRow').style.display  = showMic ? 'flex' : 'none';
-
+  const box = document.getElementById('micInfoBox');
   if (mode === 'mic') {
+    box.classList.add('show');
     startMic();
   } else {
+    box.classList.remove('show');
     stopMic();
-    document.getElementById('micStatus').textContent = 'OFF';
-    document.getElementById('micMeterFill').style.width = '0%';
   }
 }
 
 async function startMic() {
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    // iOSでは既存のStreamがあれば再利用（切断防止）
+    if (micStream && micStream.active) {
+      // 既に起動中 → analyserだけ再接続
+      if (!micAnalyser) {
+        const ac = getACtx();
+        const source = ac.createMediaStreamSource(micStream);
+        micAnalyser = ac.createAnalyser();
+        micAnalyser.fftSize = 512;
+        micAnalyser.smoothingTimeConstant = 0.0;
+        source.connect(micAnalyser);
+      }
+      monitorMic();
+      return;
+    }
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      video: false
+    });
     const ac = getACtx();
+    // iOSではAudioContextをrunning状態に保つ
+    if (ac.state === 'suspended') await ac.resume();
     const source = ac.createMediaStreamSource(micStream);
     micAnalyser = ac.createAnalyser();
     micAnalyser.fftSize = 512;
-    // smoothing=0で瞬間値をそのまま取得（アタック検知に最適）
     micAnalyser.smoothingTimeConstant = 0.0;
     source.connect(micAnalyser);
-    document.getElementById('micIndicator').classList.add('active');
+    // iOSではstreamが切れないよう、ダミーノードに接続して保持
+    const dummy = ac.createGain();
+    dummy.gain.value = 0;
+    micAnalyser.connect(dummy);
+    dummy.connect(ac.destination);
+    document.getElementById('micDot').classList.add('on');
+    document.getElementById('micStateLabel').textContent = 'マイク ON';
     monitorMic();
   } catch(e) {
-    alert('マイクのアクセスが許可されていません: ' + e.message);
+    alert('マイクのアクセスが許可されていません:\n' + e.message);
     setInputMode('tap');
   }
 }
 
 function stopMic() {
-  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  // TAPモードに戻ってもstreamは切らない（iOSで再許可が必要になるため）
   if (micAnimFrame) { cancelAnimationFrame(micAnimFrame); micAnimFrame = null; }
-  micAnalyser = null;
-  document.getElementById('micIndicator').classList.remove('active');
-  document.getElementById('micIndicator').style.background = '';
+  const dot = document.getElementById('micDot');
+  const lbl = document.getElementById('micStateLabel');
+  if (dot) { dot.classList.remove('on','hit'); }
+  if (lbl) { lbl.textContent = 'マイク OFF'; }
+  const fill = document.getElementById('micBarFill');
+  if (fill) fill.style.width = '0%';
 }
 
 function monitorMic() {
@@ -1312,19 +1456,21 @@ function monitorMic() {
     const delta = peak - prevPeak;
     prevPeak = peak;
 
-    // メーターバー更新
+    // メーターバー・ステータス更新
     const hitDetected = delta >= micThreshold && peak > bgLevel + 10;
-    const meterFill = document.getElementById('micMeterFill');
-    const micStat   = document.getElementById('micStatus');
-    if (meterFill) {
-      // deltaを可視化（0-255のdeltaをパーセントに）
-      const meterPct = Math.min(100, Math.max(0, delta / 150 * 100));
-      meterFill.style.width = meterPct + '%';
-      meterFill.classList.toggle('hit', hitDetected);
+    const barFill  = document.getElementById('micBarFill');
+    const dot      = document.getElementById('micDot');
+    const hitLabel = document.getElementById('micHitLabel');
+    if (barFill) {
+      const pct = Math.min(100, Math.max(0, delta / Math.max(micThreshold, 1) * 60));
+      barFill.style.width = pct + '%';
     }
-    if (micStat) {
-      micStat.textContent = hitDetected ? 'HIT!' : (delta > micThreshold * 0.4 ? '...' : 'ON');
-      micStat.style.color = hitDetected ? 'var(--accent)' : 'var(--accent2)';
+    if (dot) {
+      dot.classList.toggle('hit', hitDetected);
+      dot.classList.toggle('on',  !hitDetected);
+    }
+    if (hitLabel) {
+      hitLabel.classList.toggle('show', hitDetected);
     }
 
     // ★ 打音判定:
