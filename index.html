@@ -1529,7 +1529,7 @@ function startSession() {
   const ac = getACtx();
   const secPerBeat = 60 / bpm;
 
-  // ★ acとpnを同時取得 → 以後のすべての時刻はここを基準にする
+  // ac と performance.now を同時取得
   const acBase = ac.currentTime;
   const pnBase = performance.now();
   function acToPn(acT) { return pnBase + (acT - acBase) * 1000; }
@@ -1541,36 +1541,48 @@ function startSession() {
     playClick(countStartAC + i * secPerBeat, i === 0);
   }
 
-  // ★ patternStartAC/PN を確定
+  // patternStartAC = 4拍目の次の頭
   patternStartAC = countStartAC + countBeats * secPerBeat;
   patternStartPN = acToPn(patternStartAC);
 
-  // UI数字表示: setTimeoutの誤差は表示だけなので許容
+  // UI数字表示
   for (let i = 0; i < countBeats; i++) {
     const delayMs = acToPn(countStartAC + i * secPerBeat) - pnBase;
     setTimeout(() => {
-      if (sessionPhase !== 'countdown') return;
+      if (sessionPhase === 'idle') return;
       document.getElementById('feedbackMain').textContent = i + 1;
       document.getElementById('feedbackMain').className = 'feedback-main ready';
       document.getElementById('feedbackSub').textContent = 'インカウント';
     }, delayMs);
   }
 
-  // ★ beginPlay() の呼び出しもAudioCtx基準で計算したpnでスケジュール
-  // ただしbeginPlay()内ではac.currentTimeで再確認するので誤差は無害
-  const beginPlayDelay = patternStartPN - pnBase - 20; // 20ms早めに呼んで余裕を持たせる
+  // ★ 4拍目が鳴るタイミングでplayingに移行 & beginPlay()をスケジュール
+  // 4拍目 = countStartAC + 3 * secPerBeat
+  const beat4AC  = countStartAC + 3 * secPerBeat;
+  const beat4Pn  = acToPn(beat4AC);
+
+  // 4拍目クリックが鳴る直前にplayingにして、タップ受付開始
   setTimeout(() => {
-    if (sessionPhase !== 'countdown') return;
+    if (sessionPhase === 'idle') return;
+    sessionPhase = 'playing';
+    expectedBeats = buildExpectedBeats();
+    document.getElementById('feedbackMain').textContent = '4';
+    document.getElementById('feedbackSub').textContent  = '← ここから叩ける';
+  }, Math.max(0, beat4Pn - pnBase - 10));
+
+  // patternStart直前にbeginPlay（メトロノーム・カーソル開始）
+  const beginDelay = patternStartPN - pnBase - 30;
+  setTimeout(() => {
+    if (sessionPhase !== 'playing') return;
     beginPlay();
-  }, Math.max(0, beginPlayDelay));
+  }, Math.max(0, beginDelay));
 }
 
 function beginPlay() {
-  sessionPhase = 'playing';
+  // sessionPhaseはstartSession内で既にplayingに設定済み
   document.getElementById('feedbackMain').textContent = 'TAP!';
   document.getElementById('feedbackMain').className = 'feedback-main ready';
   document.getElementById('feedbackSub').textContent = '';
-  expectedBeats = buildExpectedBeats();
   const pattern = getPattern();
   const lv = LEVELS[currentLevel];
   const ac = getACtx();
@@ -1661,27 +1673,28 @@ function onHit() {
   playSnare();
   tapLog.push(tapRelMs);
 
-  // ★ 判定ウィンドウ
-  // 前方向(early)は広め(-120ms)、後方向(late)は標準(+160ms)
-  // 1拍目はpatternStartACのわずか前から叩き始めることが多いため
-  const PERFECT_EARLY = 80,  PERFECT_LATE = 80;
-  const GOOD_EARLY    = 150, GOOD_LATE    = 160;
+  // 判定ウィンドウ
+  const PERFECT_EARLY = 80,  PERFECT_LATE = 80;   // ±80ms でPERFECT
+  const GOOD_EARLY    = 200, GOOD_LATE    = 160;   // 前方向は200msまで許容
 
-  let bestDiff = 9999, bestB = null;
+  let bestDiff = 999999, bestB = null;
   expectedBeats.forEach(b => {
-    const d = Math.abs(b.timeMs - tapRelMs);
-    if (d < bestDiff) { bestDiff = d; bestB = b; }
+    const diff = tapRelMs - b.timeMs;
+    // 判定ウィンドウ内かどうか
+    if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
+      const absDiff = Math.abs(diff);
+      if (absDiff < Math.abs(bestDiff)) { bestDiff = diff; bestB = b; }
+    }
   });
 
-  if (!bestB) return;
-  const diff = tapRelMs - bestB.timeMs; // 正=遅い 負=早い
-
-  if (diff >= -PERFECT_EARLY && diff <= PERFECT_LATE) {
+  if (!bestB) {
+    // ウィンドウ外 = MISS（フィードバックはしない：どの音符にも対応しない打音）
+    return;
+  }
+  if (bestDiff >= -PERFECT_EARLY && bestDiff <= PERFECT_LATE) {
     showFeedback('PERFECT!', 'perfect', '');
-  } else if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
-    showFeedback(diff < 0 ? 'EARLY' : 'LATE', diff < 0 ? 'early' : 'late', '');
   } else {
-    showFeedback('MISS', 'miss', '');
+    showFeedback(bestDiff < 0 ? 'EARLY' : 'LATE', bestDiff < 0 ? 'early' : 'late', '');
   }
 }
 
@@ -1690,19 +1703,17 @@ function evalSession() {
   document.getElementById('cursorLine').style.display = 'none';
   document.getElementById('startBtn').textContent = '▶ スタート';
 
-  // 前方向(early)を広めに判定（1拍目の打ち始めが早い問題に対応）
   const PERFECT_EARLY = 80,  PERFECT_LATE = 80;
-  const GOOD_EARLY    = 150, GOOD_LATE    = 160;
+  const GOOD_EARLY    = 200, GOOD_LATE    = 160;
   const pattern = getPattern();
   const usedTaps = new Set();
   const results = new Array(pattern.length).fill('m');
 
   expectedBeats.forEach(b => {
-    let best = null, bestDiff = 9999;
+    let best = null, bestDiff = 999999;
     tapLog.forEach((t, i) => {
       if (usedTaps.has(i)) return;
-      const diff = t - b.timeMs; // 正=遅い 負=早い
-      // 判定ウィンドウ内かチェック
+      const diff = t - b.timeMs;
       if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
         if (Math.abs(diff) < Math.abs(bestDiff)) { best = i; bestDiff = diff; }
       }
