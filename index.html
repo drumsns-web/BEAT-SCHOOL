@@ -639,9 +639,9 @@ input[type=range]::-webkit-slider-thumb {
       </div>
       <div class="mic-thresh-row">
         <span>感度（低←→高）</span>
-        <input type="range" id="micThresh" min="5" max="150" value="60" style="flex:1;"
+        <input type="range" id="micThresh" min="3" max="300" value="30" style="flex:1;"
           oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
-        <span id="micThreshVal">60</span>
+        <span id="micThreshVal">30</span>
       </div>
     </div>
   </div>
@@ -1355,7 +1355,7 @@ let inputMode = 'tap'; // 'tap' | 'mic'
 let micStream = null;
 let micAnalyser = null;
 let micAnimFrame = null;
-let micThreshold = 60;   // delta閾値（高いほど感度が低い・誤検知しにくい）
+let micThreshold = 30;   // delta閾値（低いほど感度高い/3〜300で調整）
 let micCooldownUntil = 0; // 連続検知防止のクールダウン(ms)
 const MIC_COOLDOWN_MS = 150; // 最短打音間隔（残響・二重検知を防ぐ）
 
