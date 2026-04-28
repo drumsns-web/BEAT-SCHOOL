@@ -1326,36 +1326,81 @@ function drawTripletBracket(c, x1, x2, y, num) {
 }
 
 function drawRest(c, type, x, y, col) {
+  // Unicodeに頼らずすべてCanvas命令で描画（iOS Safari対応）
   c.fillStyle   = col;
   c.strokeStyle = col;
-  c.textAlign   = 'center';
+  c.lineWidth   = 2.2;
+  c.lineCap     = 'round';
 
   if (type === 'r') {
-    // 四分休符: 𝄽 大きめに描画
-    c.fillStyle = col;
-    c.font = '36px serif';
-    c.fillText('𝄽', x, y + 14);
+    // 四分休符: Z字型ジグザグ（標準的な四分休符の形）
+    const s = 1.8; // スケール
+    c.beginPath();
+    c.moveTo(x + 4*s,  y - 12*s);
+    c.lineTo(x - 2*s,  y - 7*s);
+    c.lineTo(x + 5*s,  y - 1*s);
+    c.lineTo(x - 1*s,  y + 4*s);
+    c.stroke();
+    // 下の丸
+    c.beginPath();
+    c.arc(x + 1*s, y + 6*s, 3*s, 0, Math.PI * 2);
+    c.fill();
+    // 丸から左下へのカーブ
+    c.beginPath();
+    c.moveTo(x + 1*s, y + 6*s);
+    c.bezierCurveTo(x - 6*s, y + 8*s, x - 5*s, y + 14*s, x + 2*s, y + 14*s);
+    c.stroke();
 
   } else if (type === 'h' || type === 'hr') {
-    // 二分休符: 線の上に乗る長方形（帽子型）
-    c.fillRect(x - 10, y - 12, 20, 6);
+    // 二分休符: 線の上に乗る帽子型の長方形
+    c.lineWidth = 1;
+    c.fillRect(x - 11, y - 11, 22, 7);
 
   } else if (type === 'w') {
-    // 全休符: 線の下に垂れ下がる長方形
-    c.fillRect(x - 10, y - 5, 20, 6);
+    // 全休符: 線の下にぶら下がる長方形
+    c.lineWidth = 1;
+    c.fillRect(x - 11, y - 4, 22, 7);
 
   } else if (type === 'er') {
-    // 八分休符: 𝄾 大きめに描画
-    c.fillStyle = col;
-    c.font = 'bold 34px serif';
-    c.fillText('𝄾', x, y + 14);
+    // 八分休符: 斜め線 + 丸 + 尾
+    c.beginPath();
+    c.moveTo(x - 3, y - 10);
+    c.lineTo(x + 6, y - 3);
+    c.stroke();
+    c.beginPath();
+    c.arc(x + 5, y - 2, 4, 0, Math.PI * 2);
+    c.fill();
+    c.beginPath();
+    c.moveTo(x + 2, y - 2);
+    c.bezierCurveTo(x - 7, y + 4, x - 5, y + 13, x + 3, y + 13);
+    c.stroke();
 
   } else if (type === 'sr') {
-    // 十六分休符: 𝄿 大きめに描画
-    c.fillStyle = col;
-    c.font = 'bold 34px serif';
-    c.fillText('𝄿', x, y + 14);
+    // 十六分休符: 八分休符×2段
+    // 上の丸と斜め線
+    c.beginPath();
+    c.moveTo(x - 3, y - 14);
+    c.lineTo(x + 6, y - 7);
+    c.stroke();
+    c.beginPath();
+    c.arc(x + 5, y - 6, 4, 0, Math.PI * 2);
+    c.fill();
+    // 下の丸と斜め線
+    c.beginPath();
+    c.moveTo(x - 3, y - 4);
+    c.lineTo(x + 6, y + 3);
+    c.stroke();
+    c.beginPath();
+    c.arc(x + 5, y + 4, 4, 0, Math.PI * 2);
+    c.fill();
+    // 縦の幹
+    c.beginPath();
+    c.moveTo(x + 2, y - 6);
+    c.bezierCurveTo(x - 7, y + 2, x - 5, y + 16, x + 3, y + 16);
+    c.stroke();
   }
+  c.lineWidth = 1;
+  c.lineCap   = 'butt';
 }
 
 
