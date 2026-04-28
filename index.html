@@ -2,6 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.3.0/dist/alphaTab.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>リズム初見練習 — スネアトレーナー</title>
 <style>
@@ -662,11 +664,11 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 
   <!-- Sheet -->
-  <div class="sheet-wrap" id="sheetWrap" style="position:relative;">
-    <canvas id="staffCanvas"></canvas>
+  <div class="sheet-wrap" id="sheetWrap">
+    <!-- AlphaTab譜面コンテナ -->
+    <div id="atContainer"></div>
+    <!-- カーソル（Canvas上に重ねる） -->
     <div class="cursor-line" id="cursorLine"></div>
-    <!-- 休符画像レイヤー（Canvasの上に絶対位置で重ねる） -->
-    <div id="restLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
   </div>
 
   <!-- Feedback -->
@@ -1192,903 +1194,152 @@ function findBeamGroups(beats, tripletGroups) {
 }
 
 function drawStaff() {
-  const canvas = document.getElementById('staffCanvas');
-  const wrap   = document.getElementById('sheetWrap');
-  if (!canvas || !wrap) return;
-  const W   = wrap.clientWidth - 20;
-  const H   = 180;
-  const DPR = window.devicePixelRatio || 2;
-  canvas.width  = W * DPR;
-  canvas.height = H * DPR;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
-  const c = canvas.getContext('2d');
-  c.scale(DPR, DPR);
-  c.clearRect(0, 0, W, H);
+  const container = document.getElementById('atContainer');
+  if (!container) return;
+  container.innerHTML = '';
 
-  const pattern = getPattern();
-  const beats   = buildBeats(pattern);
-  const lv      = LEVELS[currentLevel];
-  const totalDur = beats.reduce((s, b) => s + b.dur, 0);
-
-  const lineY      = 120;
-  const headAbove  = 10;
-  const noteY      = lineY - headAbove;
-  const stemTop    = noteY - 34;
-  const beamY      = stemTop + 4;
-  const bracketY   = beamY - 18;
-  const flagStartY = stemTop;
-  const noteAreaStart = 58;
-  const noteAreaEnd   = W - 14;
-  const pxPerBeat     = (noteAreaEnd - noteAreaStart) / totalDur;
-
-  function getHeadX(i) {
-    const off = beats.slice(0, i).reduce((s, x) => s + x.dur, 0);
-    return noteAreaStart + off * pxPerBeat + 8;
-  }
-  function getStemX(i) {
-    const rx = (beats[i].type==='s'||beats[i].type==='t'||beats[i].type==='p5'||beats[i].type==='p6'||beats[i].type==='p7'||beats[i].type==='p9') ? 5 : 6;
-    return getHeadX(i) + rx;
-  }
-
-  // スタッフ線
-  c.strokeStyle = '#2a2010'; c.lineWidth = 1.8;
-  c.beginPath(); c.moveTo(12, lineY); c.lineTo(W-12, lineY); c.stroke();
-  // パーカッションクレフ
-  c.lineWidth = 4; c.strokeStyle = '#1a1408';
-  c.beginPath(); c.moveTo(15, lineY-20); c.lineTo(15, lineY+20); c.stroke();
-  c.lineWidth = 1.8;
-  c.beginPath(); c.moveTo(21, lineY-14); c.lineTo(21, lineY+14); c.stroke();
-  // 拍子記号
-  c.fillStyle = '#1a1408'; c.textAlign = 'center';
-  c.font = 'bold 20px serif';
-  c.fillText(String(lv.timeSig), 38, lineY - 2);
-  c.fillText('4', 38, lineY + 17);
-  // 小節線
-  for (let beat = 0; beat <= totalDur + 0.001; beat += lv.timeSig) {
-    if (beat > totalDur + 0.001) break;
-    const bx = noteAreaStart + beat * pxPerBeat;
-    const isLast = beat >= totalDur - 0.001;
-    c.strokeStyle = '#1a1408'; c.lineWidth = isLast ? 2.5 : 1.2;
-    c.beginPath(); c.moveTo(bx, lineY-16); c.lineTo(bx, lineY+16); c.stroke();
-    if (isLast) { c.lineWidth = 1.2; c.beginPath(); c.moveTo(bx+5, lineY-16); c.lineTo(bx+5, lineY+16); c.stroke(); }
-  }
-  // 拍目盛り
-  for (let beat = 1; beat < totalDur; beat++) {
-    const bx = noteAreaStart + beat * pxPerBeat;
-    c.strokeStyle = 'rgba(80,60,20,0.1)'; c.lineWidth = 1;
-    c.beginPath(); c.moveTo(bx, lineY-4); c.lineTo(bx, lineY+4); c.stroke();
-  }
-
-  const tripletGroups = findTripletGroups(beats);
-  const beamGroups    = findBeamGroups(beats, tripletGroups);
-  const beamedSet     = new Set(beamGroups.flatMap(g => g.notes));
-  window._notePositions = [];
-
-  beats.forEach((b, i) => {
-    const hx  = getHeadX(i);
-    const sx  = getStemX(i);
-    const res = patternResults[b.idx];
-    const col = res ? NOTE_COLORS[res] : '#1a1408';
-    window._notePositions[i] = { x: hx };
-    if (b.isRest) { drawRest(c, b.type, hx, lineY, col); return; }
-    const rx = (b.type==='s'||b.type==='t'||b.type==='p5'||b.type==='p6'||b.type==='p7'||b.type==='p9') ? 5 : 6;
-    drawNoteHead(c, hx, noteY, (b.type !== 'h' && b.type !== 'w'), col, rx);
-    if (b.type !== 'w') {
-      c.strokeStyle = col; c.lineWidth = 1.8;
-      c.beginPath(); c.moveTo(sx, noteY - rx * 0.7); c.lineTo(sx, stemTop); c.stroke();
-      if (!beamedSet.has(i)) {
-        if (b.type === 'e') drawFlagUp(c, sx, flagStartY, 1, col);
-        if (b.type === 's') drawFlagUp(c, sx, flagStartY, 2, col);
-        if (b.type==='t'||b.type==='p5'||b.type==='p6'||b.type==='p7'||b.type==='p9') drawFlagUp(c, sx, flagStartY, 1, col);
-      }
-    }
-    if (b.type.includes('.')) {
-      c.fillStyle = col;
-      c.beginPath(); c.arc(hx + rx + 4, noteY - 3, 2.5, 0, Math.PI*2); c.fill();
-    }
-  });
-
-  beamGroups.forEach(g => {
-    const nx = g.notes;
-    const x1 = getStemX(nx[0]), x2 = getStemX(nx[nx.length-1]);
-    c.strokeStyle = '#1a1408'; c.lineWidth = 4; c.lineCap = 'square';
-    c.beginPath(); c.moveTo(x1, beamY); c.lineTo(x2, beamY); c.stroke();
-    if (g.beamCount >= 2) { c.beginPath(); c.moveTo(x1, beamY-5); c.lineTo(x2, beamY-5); c.stroke(); }
-    c.lineCap = 'butt'; c.lineWidth = 1;
-    if (g.type==='t'||g.type==='p5'||g.type==='p6'||g.type==='p7'||g.type==='p9') {
-      const num = g.tupletNum||(g.type==='t'?3:g.type==='p5'?5:g.type==='p6'?6:g.type==='p7'?7:9);
-      drawTripletBracket(c, getHeadX(nx[0]), getHeadX(nx[nx.length-1]), bracketY, num);
-    }
-  });
-
-  beats.forEach((b, i) => {
-    if (b.isRest || beamedSet.has(i)) return;
-    if (b.type!=='t'&&b.type!=='p5'&&b.type!=='p6'&&b.type!=='p7'&&b.type!=='p9') return;
-    const num = b.type==='t'?3:b.type==='p5'?5:b.type==='p6'?6:b.type==='p7'?7:9;
-    drawTripletBracket(c, getHeadX(i)-5, getHeadX(i)+10, bracketY, num);
-  });
-
-  // 休符をIMG要素で重ねる（Canvas外のHTMLレイヤー）
-  placeRestImages(beats, getHeadX, lineY, W, H);
-}
-
-function drawNoteHead(c, x, y, filled, col, rx=6) {
-  c.beginPath();
-  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-  c.fillStyle   = filled ? col : 'white';
-  c.strokeStyle = col;
-  c.lineWidth   = 1.5;
-  c.fill();
-  c.stroke();
-}
-
-// 上向き符尾のフラッグ（右下へ垂れる）
-function drawFlagUp(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;  // 複数フラッグは下へ並べる
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
-
-// 三連符括弧「3」
-function drawTripletBracket(c, x1, x2, y, num) {
-  num = num || 3;
-  const mid  = (x1 + x2) / 2;
-  const numStr = String(num);
-  // 数字の幅に合わせてgapを調整
-  c.font = 'bold 13px sans-serif';
-  const textW = c.measureText(numStr).width;
-  const gap   = textW / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  // 左: 縦→横（下向きに開口）
-  c.beginPath();
-  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
-  c.stroke();
-  // 右: 横→縦
-  c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
-  c.stroke();
-  // 数字（括弧の上）
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(numStr, mid, y - 2);
-}
-
-function drawRest(c, type, x, y, col) {
-  // r/er/sr はIMGレイヤーで描画するためCanvasでは何もしない
-  if (type === 'r' || type === 'er' || type === 'sr') return;
-
-  // 二分休符: 線の上に乗る長方形
-  if (type === 'h' || type === 'hr') {
-    c.fillStyle = col;
-    c.fillRect(x - 9, y - 11, 18, 6);
-  }
-  // 全休符: 線の下にぶら下がる長方形
-  if (type === 'w') {
-    c.fillStyle = col;
-    c.fillRect(x - 9, y - 3, 18, 6);
-  }
-}
-
-
-function drawNoteHead(c, x, y, filled, col, rx=6) {
-  c.beginPath();
-  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-  c.fillStyle   = filled ? col : 'white';
-  c.strokeStyle = col;
-  c.lineWidth   = 1.5;
-  c.fill();
-  c.stroke();
-}
-
-// 上向き符尾のフラッグ（右下へ垂れる）
-function drawFlagUp(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;  // 複数フラッグは下へ並べる
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
-
-// 三連符括弧「3」
-function drawTripletBracket(c, x1, x2, y, num) {
-  num = num || 3;
-  const mid  = (x1 + x2) / 2;
-  const numStr = String(num);
-  // 数字の幅に合わせてgapを調整
-  c.font = 'bold 13px sans-serif';
-  const textW = c.measureText(numStr).width;
-  const gap   = textW / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  // 左: 縦→横（下向きに開口）
-  c.beginPath();
-  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
-  c.stroke();
-  // 右: 横→縦
-  c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
-  c.stroke();
-  // 数字（括弧の上）
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(numStr, mid, y - 2);
-}
-
-function drawRest(c, type, x, y, col) {
-  c.fillStyle   = col;
-  c.strokeStyle = col;
-  c.lineCap     = 'round';
-  c.lineJoin    = 'round';
-
-  if (type === 'r') {
-    // ── 四分休符: 本物の形（斜め棒 + 鍵型カーブ + 丸）──
-    // スケール: 1単位 ≈ 3px
-    const s = 3.0;
-    c.lineWidth = 1.6 * (s / 3);
-    c.save();
-    c.translate(x, y);
-
-    // 上の斜め線（右上から左下へ）
-    c.beginPath();
-    c.moveTo(-1.2*s, -4.0*s);
-    c.lineTo( 1.5*s, -2.2*s);
-    c.stroke();
-
-    // 中央の折れ線（左へ戻り、右下へ伸びる）
-    c.beginPath();
-    c.moveTo( 1.5*s, -2.2*s);
-    c.lineTo(-0.8*s, -0.8*s);
-    c.lineTo( 1.8*s,  1.2*s);
-    c.stroke();
-
-    // 下端の丸い頭
-    c.beginPath();
-    c.arc(0.8*s, 2.0*s, 1.1*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 丸から左下へ伸びるカーブ（しっぽ）
-    c.lineWidth = 1.4 * (s / 3);
-    c.beginPath();
-    c.moveTo(0.8*s, 2.0*s);
-    c.bezierCurveTo(-1.5*s, 2.8*s, -1.2*s, 4.5*s, 0.5*s, 4.8*s);
-    c.stroke();
-
-    c.restore();
-
-  } else if (type === 'h' || type === 'hr') {
-    // ── 二分休符: 線の上に乗る帽子型の白抜き長方形 ──
-    const w = 14, h = 5;
-    // 外枠（黒）
-    c.fillStyle = col;
-    c.fillRect(x - w/2, y - 10, w, h);
-
-  } else if (type === 'w') {
-    // ── 全休符: 線の下にぶら下がる黒長方形 ──
-    const w = 14, h = 5;
-    c.fillStyle = col;
-    c.fillRect(x - w/2, y - 4, w, h);
-
-  } else if (type === 'er') {
-    // ── 八分休符: 本物の形（斜め線 + 塗り丸 + 弧の尾）──
-    const s = 2.6;
-    c.lineWidth = 1.5;
-    c.save();
-    c.translate(x, y);
-
-    // 斜め幹（左下から右上へ）
-    c.beginPath();
-    c.moveTo(-1.0*s, 2.5*s);
-    c.lineTo( 1.2*s, -3.0*s);
-    c.stroke();
-
-    // 上端の塗り丸
-    c.beginPath();
-    c.arc(1.2*s, -3.2*s, 1.0*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 丸から右下へ伸びる旗カーブ
-    c.beginPath();
-    c.moveTo(1.2*s, -3.0*s);
-    c.bezierCurveTo(3.5*s, -1.5*s, 3.0*s, 1.0*s, 0.5*s, 2.5*s);
-    c.stroke();
-
-    c.restore();
-
-  } else if (type === 'sr') {
-    // ── 十六分休符: 八分休符の旗を2本にした形 ──
-    const s = 2.6;
-    c.lineWidth = 1.5;
-    c.save();
-    c.translate(x, y);
-
-    // 斜め幹（より長く）
-    c.beginPath();
-    c.moveTo(-1.0*s, 3.5*s);
-    c.lineTo( 1.2*s, -4.5*s);
-    c.stroke();
-
-    // 上の塗り丸
-    c.beginPath();
-    c.arc(1.2*s, -4.5*s, 1.0*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 上の旗カーブ
-    c.beginPath();
-    c.moveTo(1.2*s, -4.5*s);
-    c.bezierCurveTo(3.5*s, -3.0*s, 3.0*s, -0.5*s, 0.5*s, 1.0*s);
-    c.stroke();
-
-    // 下の塗り丸（上の丸より少し下）
-    c.beginPath();
-    c.arc(1.2*s, -1.8*s, 1.0*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 下の旗カーブ
-    c.beginPath();
-    c.moveTo(1.2*s, -1.8*s);
-    c.bezierCurveTo(3.5*s, -0.3*s, 3.0*s, 2.2*s, 0.5*s, 3.5*s);
-    c.stroke();
-
-    c.restore();
-  }
-
-  c.lineWidth = 1;
-  c.lineCap   = 'butt';
-  c.lineJoin  = 'miter';
-}
-
-
-function drawNoteHead(c, x, y, filled, col, rx=6) {
-  c.beginPath();
-  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-  c.fillStyle   = filled ? col : 'white';
-  c.strokeStyle = col;
-  c.lineWidth   = 1.5;
-  c.fill();
-  c.stroke();
-}
-
-// 上向き符尾のフラッグ（右下へ垂れる）
-function drawFlagUp(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;  // 複数フラッグは下へ並べる
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
-
-// 三連符括弧「3」
-function drawTripletBracket(c, x1, x2, y, num) {
-  num = num || 3;
-  const mid  = (x1 + x2) / 2;
-  const numStr = String(num);
-  // 数字の幅に合わせてgapを調整
-  c.font = 'bold 13px sans-serif';
-  const textW = c.measureText(numStr).width;
-  const gap   = textW / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  // 左: 縦→横（下向きに開口）
-  c.beginPath();
-  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
-  c.stroke();
-  // 右: 横→縦
-  c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
-  c.stroke();
-  // 数字（括弧の上）
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(numStr, mid, y - 2);
-}
-
-function drawRest(c, type, x, y, col) {
-  // 画像が読み込まれていればそれを使う
-  const img = REST_IMAGES[type];
-  if (img && img.complete && img.naturalWidth > 0) {
-    c.save();
-    // 色付けが必要な場合はglobalCompositeOperationで対応
-    if (col !== '#1a1408' && col !== 'black') {
-      // 採点カラー: 通常描画後にtint
-      c.drawImage(img, x - img.naturalWidth/2, y - img.naturalHeight * 0.6,
-                  img.naturalWidth, img.naturalHeight);
-      c.globalCompositeOperation = 'source-atop';
-      c.fillStyle = col;
-      c.fillRect(x - img.naturalWidth/2, y - img.naturalHeight * 0.6,
-                 img.naturalWidth, img.naturalHeight);
-      c.globalCompositeOperation = 'source-over';
-    } else {
-      c.drawImage(img, x - img.naturalWidth/2, y - img.naturalHeight * 0.6,
-                  img.naturalWidth, img.naturalHeight);
-    }
-    c.restore();
+  if (typeof Vex === 'undefined') {
+    container.innerHTML = '<div style="padding:20px;color:#aaa;text-align:center;">VexFlow読込中...</div>';
+    setTimeout(drawStaff, 500);
     return;
   }
-  // フォールバック: シンプルな形
-  c.save();
-  c.fillStyle = col;
-  c.strokeStyle = col;
-  if (type === 'r') {
-    c.lineWidth = 2; c.lineCap = 'round'; c.lineJoin = 'round';
-    c.beginPath();
-    c.moveTo(x+4, y-14); c.lineTo(x-3, y-8); c.lineTo(x+5, y-1); c.lineTo(x-2, y+5);
-    c.stroke();
-    c.beginPath(); c.arc(x, y+8, 3, 0, Math.PI*2); c.fill();
-    c.beginPath(); c.moveTo(x, y+8); c.bezierCurveTo(x-6, y+10, x-5, y+16, x+1, y+16); c.stroke();
-  } else if (type === 'h' || type === 'hr') {
-    c.fillRect(x-9, y-11, 18, 6);
-  } else if (type === 'w') {
-    c.fillRect(x-9, y-3, 18, 6);
-  } else if (type === 'er') {
-    c.lineWidth = 1.8; c.lineCap = 'round';
-    c.beginPath(); c.arc(x+4, y-8, 3.5, 0, Math.PI*2); c.fill();
-    c.beginPath(); c.moveTo(x+4, y-8); c.lineTo(x-2, y+10); c.stroke();
-    c.beginPath(); c.moveTo(x+4, y-8); c.bezierCurveTo(x+12, y-2, x+10, y+6, x+3, y+10); c.stroke();
-  } else if (type === 'sr') {
-    c.lineWidth = 1.8; c.lineCap = 'round';
-    c.beginPath(); c.arc(x+4, y-12, 3.5, 0, Math.PI*2); c.fill();
-    c.beginPath(); c.arc(x+4, y-1, 3.5, 0, Math.PI*2); c.fill();
-    c.beginPath(); c.moveTo(x+4, y-12); c.lineTo(x-2, y+12); c.stroke();
-    c.beginPath(); c.moveTo(x+4, y-12); c.bezierCurveTo(x+12, y-6, x+10, y+2, x+3, y+6); c.stroke();
-    c.beginPath(); c.moveTo(x+4, y-1); c.bezierCurveTo(x+12, y+5, x+10, y+13, x+3, y+17); c.stroke();
-  }
-  c.restore();
-}
 
+  const pattern = getPattern();
+  const lv = LEVELS[currentLevel];
+  const VF = Vex.Flow;
+  const { Renderer, Stave, StaveNote, Voice, Formatter, Beam, Tuplet, Annotation } = VF;
 
-function drawNoteHead(c, x, y, filled, col, rx=6) {
-  c.beginPath();
-  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-  c.fillStyle   = filled ? col : 'white';
-  c.strokeStyle = col;
-  c.lineWidth   = 1.5;
-  c.fill();
-  c.stroke();
-}
+  // パターン → VexFlow音符変換
+  // NOTE_DUR マップ: 音符タイプ → {dur, dots, tupletN}
+  const DUR_MAP = {
+    q:   { dur: 'q',  dots: 0 },
+    h:   { dur: 'h',  dots: 0 },
+    w:   { dur: 'w',  dots: 0 },
+    'q.':{ dur: 'q',  dots: 1 },
+    e:   { dur: '8',  dots: 0 },
+    'e.':{ dur: '8',  dots: 1 },
+    s:   { dur: '16', dots: 0 },
+    r:   { dur: 'qr', dots: 0 },  // 四分休符
+    er:  { dur: '8r', dots: 0 },  // 八分休符
+    sr:  { dur: '16r',dots: 0 },  // 十六分休符
+    t:   { dur: '8',  dots: 0, tupletN: 3 },
+    p5:  { dur: '8',  dots: 0, tupletN: 5 },
+    p6:  { dur: '8',  dots: 0, tupletN: 6 },
+    p7:  { dur: '8',  dots: 0, tupletN: 7 },
+    p9:  { dur: '16', dots: 0, tupletN: 9 },
+  };
 
-// 上向き符尾のフラッグ（右下へ垂れる）
-function drawFlagUp(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;  // 複数フラッグは下へ並べる
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
+  // containerの幅取得
+  const W = container.clientWidth || 360;
+  const SX = 10, SY = 30;
+  const SW = W - SX * 2;
 
-// 三連符括弧「3」
-function drawTripletBracket(c, x1, x2, y, num) {
-  num = num || 3;
-  const mid  = (x1 + x2) / 2;
-  const numStr = String(num);
-  // 数字の幅に合わせてgapを調整
-  c.font = 'bold 13px sans-serif';
-  const textW = c.measureText(numStr).width;
-  const gap   = textW / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  // 左: 縦→横（下向きに開口）
-  c.beginPath();
-  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
-  c.stroke();
-  // 右: 横→縦
-  c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
-  c.stroke();
-  // 数字（括弧の上）
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(numStr, mid, y - 2);
-}
+  const renderer = new Renderer(container, Renderer.Backends.SVG);
+  renderer.resize(W, 130);
+  const ctx = renderer.getContext();
 
-// 休符用フォントが読み込まれているか確認
-let _restFontReady = false;
-function ensureRestFont(cb) {
-  if (_restFontReady) { cb(); return; }
-  if (typeof FontFace !== 'undefined') {
-    const f = new FontFace('Bravura',
-      "url('https://cdn.jsdelivr.net/npm/bravura@0.0.2/redist/bravura/Bravura.woff2') format('woff2')," +
-      "url('https://cdn.jsdelivr.net/npm/bravura@0.0.2/redist/bravura/Bravura.woff') format('woff')");
-    f.load().then(font => {
-      document.fonts.add(font);
-      _restFontReady = true;
-      cb();
-    }).catch(() => {
-      _restFontReady = true; // フォールバックとして続行
-      cb();
-    });
-  } else {
-    _restFontReady = true;
-    cb();
-  }
-}
+  // SVGスタイル
+  const svg = container.querySelector('svg');
+  if (svg) svg.style.cssText = 'background:white;display:block;border-radius:4px;';
 
-function drawRest(c, type, x, y, col) {
-  c.save();
-  c.fillStyle    = col;
-  c.strokeStyle  = col;
-  c.textAlign    = 'center';
-  c.textBaseline = 'alphabetic';
+  // Stave（1小節）
+  const stave = new Stave(SX, SY, SW);
+  stave.addClef('percussion');
+  stave.addTimeSignature(lv.timeSig + '/4');
+  stave.setContext(ctx).draw();
 
-  if (type === 'r') {
-    // 四分休符 SMuFL U+E4E5
-    c.font = "38px 'Bravura', serif";
-    c.fillText('', x, y + 10);
+  // 音符を生成
+  const vfNotes = [];
+  const tupletGroups = []; // { notes: StaveNote[], n: number }
 
-  } else if (type === 'h' || type === 'hr') {
-    // 二分休符: 線の上に乗る長方形
-    c.fillRect(x - 9, y - 11, 18, 6);
+  let i = 0;
+  while (i < pattern.length) {
+    const note = pattern[i];
+    const dm = DUR_MAP[note.t];
+    if (!dm) { i++; continue; }
 
-  } else if (type === 'w') {
-    // 全休符: 線の下にぶら下がる長方形
-    c.fillRect(x - 9, y - 3, 18, 6);
+    const isRest = NOTE_IS_REST[note.t] || note.t === 'r';
+    const tupletN = dm.tupletN;
 
-  } else if (type === 'er') {
-    // 八分休符 SMuFL U+E4E6
-    c.font = "38px 'Bravura', serif";
-    c.fillText('', x, y + 10);
-
-  } else if (type === 'sr') {
-    // 十六分休符 SMuFL U+E4E7
-    c.font = "38px 'Bravura', serif";
-    c.fillText('', x, y + 10);
+    if (tupletN) {
+      // 連符グループを収集
+      const groupNotes = [];
+      const groupType = note.t;
+      let count = 0;
+      while (i < pattern.length && pattern[i].t === groupType && count < tupletN) {
+        const gDm = DUR_MAP[pattern[i].t];
+        const sn = new StaveNote({
+          keys: ['b/4'],
+          duration: gDm.dur,
+          stem_direction: 1,
+          clef: 'percussion'
+        });
+        groupNotes.push(sn);
+        vfNotes.push(sn);
+        i++; count++;
+      }
+      if (groupNotes.length === tupletN) {
+        tupletGroups.push({ notes: groupNotes, n: tupletN });
+      }
+    } else {
+      const dur = isRest ? dm.dur : dm.dur;
+      const sn = new StaveNote({
+        keys: [isRest ? 'b/4' : 'b/4'],
+        duration: dur,
+        stem_direction: 1,
+        clef: 'percussion'
+      });
+      if (dm.dots > 0) {
+        VF.Dot.buildAndAttach([sn]);
+      }
+      vfNotes.push(sn);
+      i++;
+    }
   }
 
-  c.restore();
-}
+  if (vfNotes.length === 0) return;
 
+  // Voice
+  const voice = new Voice({ num_beats: lv.timeSig, beat_value: 4 }).setStrict(false);
+  voice.addTickables(vfNotes);
 
-function drawNoteHead(c, x, y, filled, col, rx=6) {
-  c.beginPath();
-  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-  c.fillStyle   = filled ? col : 'white';
-  c.strokeStyle = col;
-  c.lineWidth   = 1.5;
-  c.fill();
-  c.stroke();
-}
-
-// 上向き符尾のフラッグ（右下へ垂れる）
-function drawFlagUp(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;  // 複数フラッグは下へ並べる
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
-
-// 三連符括弧「3」
-function drawTripletBracket(c, x1, x2, y, num) {
-  num = num || 3;
-  const mid  = (x1 + x2) / 2;
-  const numStr = String(num);
-  // 数字の幅に合わせてgapを調整
-  c.font = 'bold 13px sans-serif';
-  const textW = c.measureText(numStr).width;
-  const gap   = textW / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  // 左: 縦→横（下向きに開口）
-  c.beginPath();
-  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
-  c.stroke();
-  // 右: 横→縦
-  c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
-  c.stroke();
-  // 数字（括弧の上）
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(numStr, mid, y - 2);
-}
-
-function drawRest(c, type, x, y, col) {
-  // y = スタッフ線Y。各休符はこれを基準に配置
-  c.save();
-  c.fillStyle   = col;
-  c.strokeStyle = col;
-  c.lineCap     = 'round';
-  c.lineJoin    = 'round';
-
-  if (type === 'r') {
-    // ── 四分休符 ──
-    // 上から: 右上斜め短線 → 左下へ折れ → 右下斜め → 下端に塗り丸 → 左下カーブ
-    c.translate(x, y - 8); // スタッフ線より少し上を中心に
-    c.lineWidth = 1.8;
-
-    // 上の斜め棒（右上方向）
-    c.beginPath();
-    c.moveTo(-4,  0);
-    c.lineTo( 3, -6);
-    c.stroke();
-
-    // 中の斜め棒（左下方向）
-    c.beginPath();
-    c.moveTo( 3, -6);
-    c.lineTo(-3,  2);
-    c.stroke();
-
-    // 下の斜め棒（右下方向）
-    c.beginPath();
-    c.moveTo(-3, 2);
-    c.lineTo( 4, 8);
-    c.stroke();
-
-    // 下端の塗り丸
-    c.beginPath();
-    c.arc(2, 10, 2.8, 0, Math.PI * 2);
-    c.fill();
-
-    // 丸から左下へのしっぽ
-    c.lineWidth = 1.6;
-    c.beginPath();
-    c.moveTo(2, 10);
-    c.bezierCurveTo(-5, 12, -4, 18, 1, 18);
-    c.stroke();
-
-  } else if (type === 'h' || type === 'hr') {
-    // ── 二分休符: 線の上に置く帽子型 ──
-    c.fillRect(x - 8, y - 10, 16, 5);
-
-  } else if (type === 'w') {
-    // ── 全休符: 線の下にぶら下がる ──
-    c.fillRect(x - 8, y - 3, 16, 5);
-
-  } else if (type === 'er') {
-    // ── 八分休符 ──
-    // 斜め棒 + 上端に塗り丸 + 右下へ旗
-    c.translate(x, y);
-    c.lineWidth = 1.6;
-
-    // 縦棒（やや右傾き）
-    c.beginPath();
-    c.moveTo(-2, 12);
-    c.lineTo( 3, -8);
-    c.stroke();
-
-    // 上端の塗り丸
-    c.beginPath();
-    c.arc(3, -10, 3, 0, Math.PI * 2);
-    c.fill();
-
-    // 旗（右下へのカーブ）
-    c.lineWidth = 1.5;
-    c.beginPath();
-    c.moveTo(3, -10);
-    c.bezierCurveTo(10, -6, 10, 0, 3, 4);
-    c.stroke();
-
-  } else if (type === 'sr') {
-    // ── 十六分休符: 旗2本 ──
-    c.translate(x, y);
-    c.lineWidth = 1.6;
-
-    // 縦棒（より長く）
-    c.beginPath();
-    c.moveTo(-2, 14);
-    c.lineTo( 3, -12);
-    c.stroke();
-
-    // 上の塗り丸
-    c.beginPath();
-    c.arc(3, -14, 3, 0, Math.PI * 2);
-    c.fill();
-
-    // 上の旗
-    c.lineWidth = 1.5;
-    c.beginPath();
-    c.moveTo(3, -14);
-    c.bezierCurveTo(10, -10, 10, -4, 3, 0);
-    c.stroke();
-
-    // 下の塗り丸
-    c.beginPath();
-    c.arc(3, -2, 3, 0, Math.PI * 2);
-    c.fill();
-
-    // 下の旗
-    c.beginPath();
-    c.moveTo(3, -2);
-    c.bezierCurveTo(10, 2, 10, 8, 3, 12);
-    c.stroke();
+  // Format & Draw
+  try {
+    new Formatter().joinVoices([voice]).format([voice], SW - 80);
+  } catch(e) {
+    new Formatter().formatToStave([voice], stave);
   }
 
-  c.restore();
-}
+  // Beam（連符を除く八分・十六分）
+  const beamNotes = vfNotes.filter(n => {
+    const dur = n.getDuration();
+    return (dur === '8' || dur === '16') && !n.isRest();
+  });
+  // tupletに含まれる音符はBeam.generateBeamsで処理
+  const tupletNoteSet = new Set(tupletGroups.flatMap(g => g.notes));
+  const nonTupletBeamNotes = vfNotes.filter(n => {
+    return !n.isRest() && (n.getDuration() === '8' || n.getDuration() === '16') && !tupletNoteSet.has(n);
+  });
 
+  voice.draw(ctx, stave);
 
-function drawNoteHead(c, x, y, filled, col, rx=6) {
-  c.beginPath();
-  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-  c.fillStyle   = filled ? col : 'white';
-  c.strokeStyle = col;
-  c.lineWidth   = 1.5;
-  c.fill();
-  c.stroke();
-}
+  // Beam描画
+  const beams = Beam.generateBeams(nonTupletBeamNotes, { stem_direction: 1 });
+  beams.forEach(b => b.setContext(ctx).draw());
 
-// 上向き符尾のフラッグ（右下へ垂れる）
-function drawFlagUp(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;  // 複数フラッグは下へ並べる
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
+  // Tuplet描画（連符ビーム＋括弧数字）
+  tupletGroups.forEach(g => {
+    try {
+      const beam = new Beam(g.notes);
+      beam.setContext(ctx).draw();
+      const tuplet = new Tuplet(g.notes, { num_notes: g.n, beats_occupied: g.n === 9 ? 2 : 1 });
+      tuplet.setContext(ctx).draw();
+    } catch(e) { console.warn('tuplet error', e); }
+  });
 
-// 三連符括弧「3」
-function drawTripletBracket(c, x1, x2, y, num) {
-  num = num || 3;
-  const mid  = (x1 + x2) / 2;
-  const numStr = String(num);
-  // 数字の幅に合わせてgapを調整
-  c.font = 'bold 13px sans-serif';
-  const textW = c.measureText(numStr).width;
-  const gap   = textW / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  // 左: 縦→横（下向きに開口）
-  c.beginPath();
-  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
-  c.stroke();
-  // 右: 横→縦
-  c.beginPath();
-  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
-  c.stroke();
-  // 数字（括弧の上）
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(numStr, mid, y - 2);
-}
-
-function drawRest(c, type, x, y, col) {
-  c.fillStyle   = col;
-  c.strokeStyle = col;
-  c.lineCap     = 'round';
-  c.lineJoin    = 'round';
-
-  if (type === 'r') {
-    // ── 四分休符: 本物の形（斜め棒 + 鍵型カーブ + 丸）──
-    // スケール: 1単位 ≈ 3px
-    const s = 3.0;
-    c.lineWidth = 1.6 * (s / 3);
-    c.save();
-    c.translate(x, y);
-
-    // 上の斜め線（右上から左下へ）
-    c.beginPath();
-    c.moveTo(-1.2*s, -4.0*s);
-    c.lineTo( 1.5*s, -2.2*s);
-    c.stroke();
-
-    // 中央の折れ線（左へ戻り、右下へ伸びる）
-    c.beginPath();
-    c.moveTo( 1.5*s, -2.2*s);
-    c.lineTo(-0.8*s, -0.8*s);
-    c.lineTo( 1.8*s,  1.2*s);
-    c.stroke();
-
-    // 下端の丸い頭
-    c.beginPath();
-    c.arc(0.8*s, 2.0*s, 1.1*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 丸から左下へ伸びるカーブ（しっぽ）
-    c.lineWidth = 1.4 * (s / 3);
-    c.beginPath();
-    c.moveTo(0.8*s, 2.0*s);
-    c.bezierCurveTo(-1.5*s, 2.8*s, -1.2*s, 4.5*s, 0.5*s, 4.8*s);
-    c.stroke();
-
-    c.restore();
-
-  } else if (type === 'h' || type === 'hr') {
-    // ── 二分休符: 線の上に乗る帽子型の白抜き長方形 ──
-    const w = 14, h = 5;
-    // 外枠（黒）
-    c.fillStyle = col;
-    c.fillRect(x - w/2, y - 10, w, h);
-
-  } else if (type === 'w') {
-    // ── 全休符: 線の下にぶら下がる黒長方形 ──
-    const w = 14, h = 5;
-    c.fillStyle = col;
-    c.fillRect(x - w/2, y - 4, w, h);
-
-  } else if (type === 'er') {
-    // ── 八分休符: 本物の形（斜め線 + 塗り丸 + 弧の尾）──
-    const s = 2.6;
-    c.lineWidth = 1.5;
-    c.save();
-    c.translate(x, y);
-
-    // 斜め幹（左下から右上へ）
-    c.beginPath();
-    c.moveTo(-1.0*s, 2.5*s);
-    c.lineTo( 1.2*s, -3.0*s);
-    c.stroke();
-
-    // 上端の塗り丸
-    c.beginPath();
-    c.arc(1.2*s, -3.2*s, 1.0*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 丸から右下へ伸びる旗カーブ
-    c.beginPath();
-    c.moveTo(1.2*s, -3.0*s);
-    c.bezierCurveTo(3.5*s, -1.5*s, 3.0*s, 1.0*s, 0.5*s, 2.5*s);
-    c.stroke();
-
-    c.restore();
-
-  } else if (type === 'sr') {
-    // ── 十六分休符: 八分休符の旗を2本にした形 ──
-    const s = 2.6;
-    c.lineWidth = 1.5;
-    c.save();
-    c.translate(x, y);
-
-    // 斜め幹（より長く）
-    c.beginPath();
-    c.moveTo(-1.0*s, 3.5*s);
-    c.lineTo( 1.2*s, -4.5*s);
-    c.stroke();
-
-    // 上の塗り丸
-    c.beginPath();
-    c.arc(1.2*s, -4.5*s, 1.0*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 上の旗カーブ
-    c.beginPath();
-    c.moveTo(1.2*s, -4.5*s);
-    c.bezierCurveTo(3.5*s, -3.0*s, 3.0*s, -0.5*s, 0.5*s, 1.0*s);
-    c.stroke();
-
-    // 下の塗り丸（上の丸より少し下）
-    c.beginPath();
-    c.arc(1.2*s, -1.8*s, 1.0*s, 0, Math.PI * 2);
-    c.fill();
-
-    // 下の旗カーブ
-    c.beginPath();
-    c.moveTo(1.2*s, -1.8*s);
-    c.bezierCurveTo(3.5*s, -0.3*s, 3.0*s, 2.2*s, 0.5*s, 3.5*s);
-    c.stroke();
-
-    c.restore();
-  }
-
-  c.lineWidth = 1;
-  c.lineCap   = 'butt';
-  c.lineJoin  = 'miter';
+  // カーソル位置の記録（タップ判定用）
+  window._vfStaveX = stave.getX();
+  window._vfStaveW = stave.getWidth();
 }
 
 
