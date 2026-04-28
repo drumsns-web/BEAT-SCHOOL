@@ -2,7 +2,6 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@latest/dist/alphaTab.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>リズム初見練習 — スネアトレーナー</title>
 <style>
@@ -663,12 +662,8 @@ input[type=range]::-webkit-slider-thumb {
 
   <!-- Sheet -->
   <div class="sheet-wrap" id="sheetWrap">
-    <!-- AlphaTab譜面 -->
-    <div id="atWrap" style="background:#fff;border-radius:4px;overflow:hidden;min-height:100px;"></div>
-    <!-- カーソルオーバーレイ -->
+    <canvas id="staffCanvas"></canvas>
     <div class="cursor-line" id="cursorLine"></div>
-    <!-- フォールバック用canvas（非表示） -->
-    <canvas id="staffCanvas" style="display:none;"></canvas>
   </div>
 
   <!-- Feedback -->
@@ -957,8 +952,6 @@ let xp = 0;
 let unlockedLevel = parseInt(localStorage.getItem('snare_unlockedLevel') || '1', 10);
 let patternResults = [];
 let audioCtx = null;
-let _atApi = null; // AlphaTabインスタンス
-let _atApi = null; // AlphaTabインスタンス
 let expectedBeats = [];
 let tapLog = [];
 
@@ -1043,64 +1036,9 @@ const ALPHATEX_DUR = {
   p9:  '8{tu 9}',   // 九連符
 };
 
-// AlphaTex音符名マップ
-const ALPHATEX_DUR = {
-  q:   '4',    h:   '2',    w:   '1',   'q.': '4.',
-  e:   '8',    er:  'r8',   s:   '16',  sr:   'r16',  r: 'r4',
-  t:   '8{tu 3}',
-  p5:  '8{tu 5}',
-  p7:  '8{tu 7}',
-  p9:  '16{tu 9}',
-};
-
 const NOTE_COLORS = { p:'#1a6b3a', g:'#c8920a', e:'#c8a000', l:'#c8a000', m:'#c8390a', _:'#1a1408' };
 
 // パターン配列をAlphaTex文字列に変換
-function patternToAlphaTex(pattern, timeSig, bpm) {
-  const BS = '\\';
-  const lines = [];
-  lines.push(BS + 'track "Snare"');
-  lines.push(BS + 'instrument 0');
-  lines.push(BS + 'tempo ' + bpm);
-  lines.push(BS + 'clef neutral');
-
-  // 拍子記号
-  const num = timeSig, den = 4;
-
-  // 音符を構築
-  const notes = pattern.map(n => {
-    const dur = ALPHATEX_DUR[n.t];
-    if (!dur) return 'r4'; // フォールバック
-    if (dur.startsWith('r')) {
-      // 休符: r4, r8, r16 など
-      return dur;
-    }
-    // スネア音符: c5.{dur}{beam up}
-    return `c5.${dur}{beam up}`;
-  });
-
-  lines.push(`(${num}/${den}) ${notes.join(' ')} |`);
-  return lines.join('
-');
-}
-
-function patternToAlphaTex(pattern, timeSig, bpmVal) {
-  const BS = '\\';
-  const notes = pattern.map(n => {
-    const dur = ALPHATEX_DUR[n.t] || 'r4';
-    if (dur.startsWith('r')) return dur; // 休符
-    return `c5.${dur}{beam up}`;         // スネア音符
-  });
-  // AlphaTex: ヘッダ + 音符列
-  return [
-    BS + 'track "Snare"',
-    BS + 'instrument 0',
-    BS + 'tempo ' + bpmVal,
-    BS + 'clef neutral',
-    `(${timeSig}/4) ` + notes.join(' ') + ' |'
-  ].join('\n');
-}
-
 function buildBeats(pattern) {
   const beats = [];
   pattern.forEach((note, i) => {
@@ -1188,70 +1126,123 @@ function findBeamGroups(beats, tripletGroups) {
 }
 
 function drawStaff() {
+  const canvas = document.getElementById('staffCanvas');
+  const wrap   = document.getElementById('sheetWrap');
+  if (!canvas || !wrap) return;
+  const W   = wrap.clientWidth - 20;
+  const H   = 180;
+  const DPR = window.devicePixelRatio || 2;
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  const c = canvas.getContext('2d');
+  c.scale(DPR, DPR);
+  c.clearRect(0, 0, W, H);
+
   const pattern = getPattern();
-  const lv = LEVELS[currentLevel];
-  const tex = patternToAlphaTex(pattern, lv.timeSig, bpm);
-  const wrap = document.getElementById('atWrap');
-  if (!wrap) return;
+  const beats   = buildBeats(pattern);
+  const lv      = LEVELS[currentLevel];
+  const totalDur = beats.reduce((s, b) => s + b.dur, 0);
 
-  if (typeof alphaTab === 'undefined') {
-    // AlphaTab未ロード時はフォールバック
-    wrap.innerHTML = '<div style="padding:20px;color:#aaa;text-align:center;">譜面読み込み中...</div>';
-    setTimeout(drawStaff, 500);
-    return;
+  const lineY      = 120;
+  const headAbove  = 10;
+  const noteY      = lineY - headAbove;
+  const stemTop    = noteY - 34;
+  const beamY      = stemTop + 4;
+  const bracketY   = beamY - 18;
+  const flagStartY = stemTop;
+  const noteAreaStart = 58;
+  const noteAreaEnd   = W - 14;
+  const pxPerBeat     = (noteAreaEnd - noteAreaStart) / totalDur;
+
+  function getHeadX(i) {
+    const off = beats.slice(0, i).reduce((s, x) => s + x.dur, 0);
+    return noteAreaStart + off * pxPerBeat + 8;
+  }
+  function getStemX(i) {
+    const rx = (beats[i].type==='s'||beats[i].type==='t'||beats[i].type==='p5'||beats[i].type==='p7'||beats[i].type==='p9') ? 5 : 6;
+    return getHeadX(i) + rx;
   }
 
-  if (_atApi) {
-    // 既存インスタンスに新しいtexを流す
-    try {
-      _atApi.tex(tex, [0]);
-      return;
-    } catch(e) {
-      _atApi = null;
-      wrap.innerHTML = '';
+  // スタッフ線
+  c.strokeStyle = '#2a2010'; c.lineWidth = 1.8;
+  c.beginPath(); c.moveTo(12, lineY); c.lineTo(W-12, lineY); c.stroke();
+  // パーカッションクレフ
+  c.lineWidth = 4; c.strokeStyle = '#1a1408';
+  c.beginPath(); c.moveTo(15, lineY-20); c.lineTo(15, lineY+20); c.stroke();
+  c.lineWidth = 1.8;
+  c.beginPath(); c.moveTo(21, lineY-14); c.lineTo(21, lineY+14); c.stroke();
+  // 拍子記号
+  c.fillStyle = '#1a1408'; c.textAlign = 'center';
+  c.font = 'bold 20px serif';
+  c.fillText(String(lv.timeSig), 38, lineY - 2);
+  c.fillText('4', 38, lineY + 17);
+  // 小節線
+  for (let beat = 0; beat <= totalDur + 0.001; beat += lv.timeSig) {
+    if (beat > totalDur + 0.001) break;
+    const bx = noteAreaStart + beat * pxPerBeat;
+    const isLast = beat >= totalDur - 0.001;
+    c.strokeStyle = '#1a1408'; c.lineWidth = isLast ? 2.5 : 1.2;
+    c.beginPath(); c.moveTo(bx, lineY-16); c.lineTo(bx, lineY+16); c.stroke();
+    if (isLast) { c.lineWidth = 1.2; c.beginPath(); c.moveTo(bx+5, lineY-16); c.lineTo(bx+5, lineY+16); c.stroke(); }
+  }
+  // 拍目盛り
+  for (let beat = 1; beat < totalDur; beat++) {
+    const bx = noteAreaStart + beat * pxPerBeat;
+    c.strokeStyle = 'rgba(80,60,20,0.1)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(bx, lineY-4); c.lineTo(bx, lineY+4); c.stroke();
+  }
+
+  const tripletGroups = findTripletGroups(beats);
+  const beamGroups    = findBeamGroups(beats, tripletGroups);
+  const beamedSet     = new Set(beamGroups.flatMap(g => g.notes));
+  window._notePositions = [];
+
+  beats.forEach((b, i) => {
+    const hx  = getHeadX(i);
+    const sx  = getStemX(i);
+    const res = patternResults[b.idx];
+    const col = res ? NOTE_COLORS[res] : '#1a1408';
+    window._notePositions[i] = { x: hx };
+    if (b.isRest) { drawRest(c, b.type, hx, lineY, col); return; }
+    const rx = (b.type==='s'||b.type==='t'||b.type==='p5'||b.type==='p7'||b.type==='p9') ? 5 : 6;
+    drawNoteHead(c, hx, noteY, (b.type !== 'h' && b.type !== 'w'), col, rx);
+    if (b.type !== 'w') {
+      c.strokeStyle = col; c.lineWidth = 1.8;
+      c.beginPath(); c.moveTo(sx, noteY - rx * 0.7); c.lineTo(sx, stemTop); c.stroke();
+      if (!beamedSet.has(i)) {
+        if (b.type === 'e') drawFlagUp(c, sx, flagStartY, 1, col);
+        if (b.type === 's') drawFlagUp(c, sx, flagStartY, 2, col);
+        if (b.type==='t'||b.type==='p5'||b.type==='p7'||b.type==='p9') drawFlagUp(c, sx, flagStartY, 1, col);
+      }
     }
-  }
+    if (b.type.includes('.')) {
+      c.fillStyle = col;
+      c.beginPath(); c.arc(hx + rx + 4, noteY - 3, 2.5, 0, Math.PI*2); c.fill();
+    }
+  });
 
-  // 初回: AlphaTabApi生成
-  wrap.innerHTML = '';
-  try {
-    _atApi = new alphaTab.AlphaTabApi(wrap, {
-      core: { engine: 'svg', logLevel: 0 },
-      display: { scale: 1.1, barsPerRow: 1 },
-      player: { enablePlayer: false }
-    });
+  beamGroups.forEach(g => {
+    const nx = g.notes;
+    const x1 = getStemX(nx[0]), x2 = getStemX(nx[nx.length-1]);
+    c.strokeStyle = '#1a1408'; c.lineWidth = 4; c.lineCap = 'square';
+    c.beginPath(); c.moveTo(x1, beamY); c.lineTo(x2, beamY); c.stroke();
+    if (g.beamCount >= 2) { c.beginPath(); c.moveTo(x1, beamY-5); c.lineTo(x2, beamY-5); c.stroke(); }
+    c.lineCap = 'butt'; c.lineWidth = 1;
+    if (g.type==='t'||g.type==='p5'||g.type==='p7'||g.type==='p9') {
+      const num = g.tupletNum||(g.type==='t'?3:g.type==='p5'?5:g.type==='p7'?7:9);
+      drawTripletBracket(c, getHeadX(nx[0]), getHeadX(nx[nx.length-1]), bracketY, num);
+    }
+  });
 
-    _atApi.renderFinished.on(() => {
-      // SVGの色を黒に統一
-      wrap.querySelectorAll('svg *').forEach(el => {
-        const f = el.getAttribute('fill');
-        const s = el.getAttribute('stroke');
-        if (f && f !== 'none' && !f.match(/^#[fF]{3,6}$/) && f !== '#000' && f !== '#000000') el.setAttribute('fill', '#1a1408');
-        if (s && s !== 'none' && !s.match(/^#[fF]{3,6}$/) && s !== '#000' && s !== '#000000') el.setAttribute('stroke', '#1a1408');
-      });
-      // 採点結果の色を反映
-      applyResultColors();
-    });
-
-    _atApi.error.on(e => {
-      console.error('AlphaTab error:', e);
-      _atApi = null;
-    });
-
-    _atApi.tex(tex, [0]);
-  } catch(e) {
-    console.error('AlphaTab init error:', e);
-    _atApi = null;
-    wrap.innerHTML = '<div style="padding:10px;color:#c00;">譜面エラー</div>';
-  }
+  beats.forEach((b, i) => {
+    if (b.isRest || beamedSet.has(i)) return;
+    if (b.type!=='t'&&b.type!=='p5'&&b.type!=='p7'&&b.type!=='p9') return;
+    const num = b.type==='t'?3:b.type==='p5'?5:b.type==='p7'?7:9;
+    drawTripletBracket(c, getHeadX(i)-5, getHeadX(i)+10, bracketY, num);
+  });
 }
-
-// 採点後に音符の色をresultに応じて変える（AlphaTab SVGに対して）
-function applyResultColors() {
-  // AlphaTabのSVGは音符ごとのIDがないため、現状は全体色のみ
-  // 将来的に個別カラーに対応予定
-}
-
 
 function drawNoteHead(c, x, y, filled, col, rx=6) {
   c.beginPath();
