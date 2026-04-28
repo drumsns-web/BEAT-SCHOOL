@@ -1293,6 +1293,169 @@ function drawTripletBracket(c, x1, x2, y, num) {
 }
 
 function drawRest(c, type, x, y, col) {
+  // y = スタッフ線Y。各休符はこれを基準に配置
+  c.save();
+  c.fillStyle   = col;
+  c.strokeStyle = col;
+  c.lineCap     = 'round';
+  c.lineJoin    = 'round';
+
+  if (type === 'r') {
+    // ── 四分休符 ──
+    // 上から: 右上斜め短線 → 左下へ折れ → 右下斜め → 下端に塗り丸 → 左下カーブ
+    c.translate(x, y - 8); // スタッフ線より少し上を中心に
+    c.lineWidth = 1.8;
+
+    // 上の斜め棒（右上方向）
+    c.beginPath();
+    c.moveTo(-4,  0);
+    c.lineTo( 3, -6);
+    c.stroke();
+
+    // 中の斜め棒（左下方向）
+    c.beginPath();
+    c.moveTo( 3, -6);
+    c.lineTo(-3,  2);
+    c.stroke();
+
+    // 下の斜め棒（右下方向）
+    c.beginPath();
+    c.moveTo(-3, 2);
+    c.lineTo( 4, 8);
+    c.stroke();
+
+    // 下端の塗り丸
+    c.beginPath();
+    c.arc(2, 10, 2.8, 0, Math.PI * 2);
+    c.fill();
+
+    // 丸から左下へのしっぽ
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(2, 10);
+    c.bezierCurveTo(-5, 12, -4, 18, 1, 18);
+    c.stroke();
+
+  } else if (type === 'h' || type === 'hr') {
+    // ── 二分休符: 線の上に置く帽子型 ──
+    c.fillRect(x - 8, y - 10, 16, 5);
+
+  } else if (type === 'w') {
+    // ── 全休符: 線の下にぶら下がる ──
+    c.fillRect(x - 8, y - 3, 16, 5);
+
+  } else if (type === 'er') {
+    // ── 八分休符 ──
+    // 斜め棒 + 上端に塗り丸 + 右下へ旗
+    c.translate(x, y);
+    c.lineWidth = 1.6;
+
+    // 縦棒（やや右傾き）
+    c.beginPath();
+    c.moveTo(-2, 12);
+    c.lineTo( 3, -8);
+    c.stroke();
+
+    // 上端の塗り丸
+    c.beginPath();
+    c.arc(3, -10, 3, 0, Math.PI * 2);
+    c.fill();
+
+    // 旗（右下へのカーブ）
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(3, -10);
+    c.bezierCurveTo(10, -6, 10, 0, 3, 4);
+    c.stroke();
+
+  } else if (type === 'sr') {
+    // ── 十六分休符: 旗2本 ──
+    c.translate(x, y);
+    c.lineWidth = 1.6;
+
+    // 縦棒（より長く）
+    c.beginPath();
+    c.moveTo(-2, 14);
+    c.lineTo( 3, -12);
+    c.stroke();
+
+    // 上の塗り丸
+    c.beginPath();
+    c.arc(3, -14, 3, 0, Math.PI * 2);
+    c.fill();
+
+    // 上の旗
+    c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(3, -14);
+    c.bezierCurveTo(10, -10, 10, -4, 3, 0);
+    c.stroke();
+
+    // 下の塗り丸
+    c.beginPath();
+    c.arc(3, -2, 3, 0, Math.PI * 2);
+    c.fill();
+
+    // 下の旗
+    c.beginPath();
+    c.moveTo(3, -2);
+    c.bezierCurveTo(10, 2, 10, 8, 3, 12);
+    c.stroke();
+  }
+
+  c.restore();
+}
+
+
+function drawNoteHead(c, x, y, filled, col, rx=6) {
+  c.beginPath();
+  c.ellipse(x, y, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
+  c.fillStyle   = filled ? col : 'white';
+  c.strokeStyle = col;
+  c.lineWidth   = 1.5;
+  c.fill();
+  c.stroke();
+}
+
+// 上向き符尾のフラッグ（右下へ垂れる）
+function drawFlagUp(c, x, y, count, col) {
+  c.strokeStyle = col;
+  c.lineWidth   = 1.6;
+  for (let f = 0; f < count; f++) {
+    const fy = y + f * 7;  // 複数フラッグは下へ並べる
+    c.beginPath();
+    c.moveTo(x, fy);
+    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
+    c.stroke();
+  }
+}
+
+// 三連符括弧「3」
+function drawTripletBracket(c, x1, x2, y, num) {
+  num = num || 3;
+  const mid  = (x1 + x2) / 2;
+  const numStr = String(num);
+  // 数字の幅に合わせてgapを調整
+  c.font = 'bold 13px sans-serif';
+  const textW = c.measureText(numStr).width;
+  const gap   = textW / 2 + 3;
+  c.strokeStyle = '#333';
+  c.lineWidth   = 1.2;
+  // 左: 縦→横（下向きに開口）
+  c.beginPath();
+  c.moveTo(x1, y + 6); c.lineTo(x1, y); c.lineTo(mid - gap, y);
+  c.stroke();
+  // 右: 横→縦
+  c.beginPath();
+  c.moveTo(mid + gap, y); c.lineTo(x2, y); c.lineTo(x2, y + 6);
+  c.stroke();
+  // 数字（括弧の上）
+  c.fillStyle = '#222';
+  c.textAlign = 'center';
+  c.fillText(numStr, mid, y - 2);
+}
+
+function drawRest(c, type, x, y, col) {
   c.fillStyle   = col;
   c.strokeStyle = col;
   c.lineCap     = 'round';
