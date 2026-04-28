@@ -1055,10 +1055,11 @@ function placeRestImages(beats, getHeadX, lineY, canvasW, canvasH) {
   if (!layer) return;
   layer.innerHTML = '';
 
-  // sheetWrapの実サイズに対するcanvasの論理サイズの比率
-  const canvas  = document.getElementById('staffCanvas');
-  const scaleX  = canvas.offsetWidth  / (canvasW || canvas.offsetWidth);
-  const scaleY  = canvas.offsetHeight / (canvasH || canvas.offsetHeight);
+  const canvas = document.getElementById('staffCanvas');
+  // canvas論理座標 → CSS表示座標の比率
+  // canvas.width/height はDPR倍されているので offsetWidth/Height を使う
+  const scaleX = canvas.offsetWidth  / canvasW;
+  const scaleY = canvas.offsetHeight / canvasH;
 
   beats.forEach((b, i) => {
     if (!b.isRest) return;
@@ -1067,28 +1068,28 @@ function placeRestImages(beats, getHeadX, lineY, canvasW, canvasH) {
     const src = REST_IMG_SRC[b.type];
     if (!src) return;
 
-    const hx = getHeadX(i); // canvas論理座標
+    const hx = getHeadX(i); // canvas論理座標（px）
 
-    // 表示サイズ（論理px）
-    const dispH = b.type === 'sr' ? 34 : 28;
-    const dispW = b.type === 'r'  ? 18 :
-                  b.type === 'er' ? 14 :
-                  b.type === 'sr' ? 14 : 14;
+    // 休符の表示サイズ（論理px）
+    const dispH = b.type === 'sr' ? 32 : 24;
+    const dispW = b.type === 'r'  ? 16 : 12;
 
-    // canvas論理座標 → CSS座標
-    const cssX = hx  * scaleX;
-    const cssY = (lineY - dispH * 0.65) * scaleY;
+    // 休符の縦位置: lineYを中心に上下にオフセット
+    // r: 四分休符 → lineYの少し上から
+    // er/sr: 八分・十六分休符 → lineYの上に配置
+    const offsetY = b.type === 'r'  ? -dispH * 0.85 :
+                    b.type === 'er' ? -dispH * 0.75 :
+                    -dispH * 0.65;
+
+    // CSS座標に変換
+    const cssLeft = (hx - dispW / 2) * scaleX;
+    const cssTop  = (lineY + offsetY) * scaleY;
+    const cssW    = dispW * scaleX;
+    const cssH    = dispH * scaleY;
 
     const imgEl = document.createElement('img');
     imgEl.src = src;
-    imgEl.style.cssText = `
-      position: absolute;
-      left: ${cssX - dispW/2 * scaleX}px;
-      top:  ${cssY}px;
-      width:  ${dispW * scaleX}px;
-      height: ${dispH * scaleY}px;
-      image-rendering: auto;
-    `;
+    imgEl.style.cssText = `position:absolute;left:${cssLeft}px;top:${cssTop}px;width:${cssW}px;height:${cssH}px;`;
     layer.appendChild(imgEl);
   });
 }
