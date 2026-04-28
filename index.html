@@ -1331,30 +1331,30 @@ function drawRest(c, type, x, y, col) {
   c.textAlign   = 'center';
 
   if (type === 'r') {
-    // 四分休符: 𝄽 Unicodeで描画
+    // 四分休符: 𝄽 大きめに描画
     c.fillStyle = col;
-    c.font = '22px serif';
-    c.fillText('𝄽', x, y + 8);
+    c.font = '36px serif';
+    c.fillText('𝄽', x, y + 14);
 
   } else if (type === 'h' || type === 'hr') {
     // 二分休符: 線の上に乗る長方形（帽子型）
-    c.fillRect(x - 8, y - 12, 16, 5);
+    c.fillRect(x - 10, y - 12, 20, 6);
 
   } else if (type === 'w') {
     // 全休符: 線の下に垂れ下がる長方形
-    c.fillRect(x - 8, y - 6, 16, 5);
+    c.fillRect(x - 10, y - 5, 20, 6);
 
   } else if (type === 'er') {
-    // 八分休符: 𝄾 Unicodeで描画
+    // 八分休符: 𝄾 大きめに描画
     c.fillStyle = col;
-    c.font = 'bold 20px serif';
-    c.fillText('𝄾', x, y + 8);
+    c.font = 'bold 34px serif';
+    c.fillText('𝄾', x, y + 14);
 
   } else if (type === 'sr') {
-    // 十六分休符: 𝄿 Unicodeで描画
+    // 十六分休符: 𝄿 大きめに描画
     c.fillStyle = col;
-    c.font = 'bold 20px serif';
-    c.fillText('𝄿', x, y + 8);
+    c.font = 'bold 34px serif';
+    c.fillText('𝄿', x, y + 14);
   }
 }
 
