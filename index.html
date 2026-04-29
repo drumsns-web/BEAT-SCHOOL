@@ -1341,14 +1341,14 @@ function drawStaff() {
     try {
       // 連符グループのビーム
       if (g.notes.length >= 2 && !g.notes[0].isRest()) {
-        const tb = new Beam(g.notes, true);
+        const tb = new Beam(g.notes, false);  // false=自動判定
         tb.setContext(ctx).draw();
       }
       // 連符括弧（符尾上向き → 上に表示、数字のみ「3」）
       const tup = new Tuplet(g.notes, {
         num_notes:      g.n,
         beats_occupied: g.beatsOccupied || 1,
-        location:       -1,      // -1=符尾と反対側=上（符尾上向きなら上）
+        location:        1,      // 1=符尾側=上（stem_direction -1 で上向きなので）
         ratioed:        false,   // 「3:2」ではなく「3」だけ表示
         bracketed:      true,    // 括弧を表示
       });
@@ -1381,7 +1381,7 @@ function makeNote(dur, isRest, VF, StaveNote, dotted) {
   const sn = new StaveNote({
     keys:           ['b/4'],
     duration:       dur,
-    stem_direction: 1,
+    stem_direction: -1,  // -1=上向き（VexFlow仕様）
     clef:           'percussion',
   });
   if (dotted && VF.Dot) {
@@ -1812,20 +1812,24 @@ function beginPlay() {
     playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
   }
 
-  // ★ バーアニメーション - シンプルに幅だけで計算
-  const cursorEl    = document.getElementById('cursorLine');
-  const sheetRect   = document.getElementById('sheetWrap').getBoundingClientRect();
-  // x0: 譜面の左マージン（クレフ・拍子記号の幅分）
-  // x1: 譜面の右端マージン
-  // これらはVexFlowのレイアウトに関係なく固定値で十分
-  const x0 = sheetRect.width * 0.18;  // 左18%（クレフ+拍子記号の幅）
-  const x1 = sheetRect.width * 0.97;  // 右97%
+  // ★ バーアニメーション
+  const cursorEl = document.getElementById('cursorLine');
+
+  // SVGの実際の表示スケールを計算（内部座標→CSS座標）
+  const svgEl    = document.querySelector('#atContainer svg');
+  const svgIntW  = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
+  const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : 0;
+  const svgScale = (svgIntW > 1 && svgDispW > 1) ? svgDispW / svgIntW : 1;
+
+  // VexFlowのSVG内部座標をCSSピクセルに変換
+  const x0 = (window._vfFirstNoteX != null ? window._vfFirstNoteX : 80) * svgScale;
+  const x1 = (window._vfEndX       != null ? window._vfEndX       : svgDispW * 0.97) * svgScale;
 
   window._cursorX0      = x0;
   window._cursorX1      = x1;
   window._cursorTotalMs = totalMs;
 
-  // acとpnを同時取得してpatternStartACと正確に対応付ける
+  // ACとPNを同時取得してpatternStartACと正確に対応付ける
   const acNow       = ac.currentTime;
   const pnNow       = performance.now();
   const animStartPN = pnNow + (patternStartAC - acNow) * 1000;
