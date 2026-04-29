@@ -1812,8 +1812,6 @@ function beginPlay() {
   }
 
   // ★ バーアニメーション
-  // 毎フレーム ac.currentTime - patternStartAC で経過時間を計算
-  // → setTimeout/performance.nowの誤差に完全に依存しない
   const cursorEl  = document.getElementById('cursorLine');
   const container = document.getElementById('atContainer');
 
@@ -1823,23 +1821,33 @@ function beginPlay() {
   const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : 0;
   const svgScale = (svgIntW > 0 && svgDispW > 0) ? svgDispW / svgIntW : 1;
 
-  const x0 = (window._vfFirstNoteX || 80)  * svgScale;
-  const x1 = (window._vfEndX       || 350) * svgScale;
+  // atContainerのsheetWrap内でのオフセットも加算
+  const sheetWrapEl  = document.getElementById('sheetWrap');
+  const atEl         = container;
+  const offsetX = (atEl && sheetWrapEl)
+    ? atEl.getBoundingClientRect().left - sheetWrapEl.getBoundingClientRect().left
+    : 0;
+  const x0 = (window._vfFirstNoteX || 80)  * svgScale + offsetX;
+  const x1 = (window._vfEndX       || 350) * svgScale + offsetX;
 
   window._cursorX0      = x0;
   window._cursorX1      = x1;
   window._cursorTotalMs = totalMs;
 
+  // ★ beginPlay()が呼ばれた瞬間のACとPNを同時取得して対応付け
+  const acNow = ac.currentTime;
+  const pnNow = performance.now();
+  // patternStartACに対応するperformance.now
+  // (patternStartACはAudioCtxのスケジュール時刻なので未来の場合もある)
+  const animStartPN = pnNow + (patternStartAC - acNow) * 1000;
+
   cursorEl.style.display = 'block';
   cursorEl.style.left    = x0 + 'px';
 
-  const _ac = getACtx();
   function animCursor() {
     if (sessionPhase !== 'playing') return;
-    // ★ AudioCtxのcurrentTimeから直接計算（最も正確）
-    const elapsedMs = (_ac.currentTime - patternStartAC) * 1000;
+    const elapsedMs = performance.now() - animStartPN;
     if (elapsedMs < 0) {
-      // まだパターン開始前（早く呼ばれた場合）
       requestAnimationFrame(animCursor);
       return;
     }
