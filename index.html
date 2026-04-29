@@ -1812,37 +1812,38 @@ function beginPlay() {
   }
 
   // ★ バーアニメーション
-  // ac と performance.now を同時取得してpatternStartACと対応付ける
-  const acAtBeginPlay  = ac.currentTime;
-  const pnAtBeginPlay  = performance.now();
-  // patternStartAC に対応する performance.now 時刻
-  const cursorStartPN  = pnAtBeginPlay + (patternStartAC - acAtBeginPlay) * 1000;
-
+  // 毎フレーム ac.currentTime - patternStartAC で経過時間を計算
+  // → setTimeout/performance.nowの誤差に完全に依存しない
   const cursorEl  = document.getElementById('cursorLine');
   const container = document.getElementById('atContainer');
 
-  // ── 音符の表示X座標をここで確定（一度だけSVGスケール計算） ──
-  const svgEl  = container ? container.querySelector('svg') : null;
-  const svgIntW = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
+  // SVGスケールを一度だけ計算
+  const svgEl    = container ? container.querySelector('svg') : null;
+  const svgIntW  = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
   const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : 0;
   const svgScale = (svgIntW > 0 && svgDispW > 0) ? svgDispW / svgIntW : 1;
 
-  // 1拍目音符のCSS X座標と最終音符右端のCSS X座標
-  const x0 = (window._vfFirstNoteX || 80) * svgScale;   // 1拍目音符中心
-  const x1 = (window._vfEndX       || 350) * svgScale;   // 最終音符右端
+  const x0 = (window._vfFirstNoteX || 80)  * svgScale;
+  const x1 = (window._vfEndX       || 350) * svgScale;
 
-  // グローバルに保存（tapRelMsToXから使う）
-  window._cursorX0    = x0;
-  window._cursorX1    = x1;
+  window._cursorX0      = x0;
+  window._cursorX1      = x1;
   window._cursorTotalMs = totalMs;
+
   cursorEl.style.display = 'block';
   cursorEl.style.left    = x0 + 'px';
 
+  const _ac = getACtx();
   function animCursor() {
     if (sessionPhase !== 'playing') return;
-    // patternStartPNからの経過ms（これがAudioCtxと同期している）
-    const elapsedMs = performance.now() - cursorStartPN;
-    const pct    = Math.max(0, Math.min(1, elapsedMs / totalMs));
+    // ★ AudioCtxのcurrentTimeから直接計算（最も正確）
+    const elapsedMs = (_ac.currentTime - patternStartAC) * 1000;
+    if (elapsedMs < 0) {
+      // まだパターン開始前（早く呼ばれた場合）
+      requestAnimationFrame(animCursor);
+      return;
+    }
+    const pct     = Math.min(1, elapsedMs / totalMs);
     const cursorX = x0 + pct * (x1 - x0);
     cursorEl.style.left = cursorX + 'px';
 
