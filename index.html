@@ -1822,8 +1822,8 @@ function beginPlay() {
   const svgScale = (svgIntW > 1 && svgDispW > 1) ? svgDispW / svgIntW : 1;
 
   // VexFlowのSVG内部座標をCSSピクセルに変換
-  const x0 = (window._vfFirstNoteX != null ? window._vfFirstNoteX : 80) * svgScale;
-  const x1 = (window._vfEndX       != null ? window._vfEndX       : svgDispW * 0.97) * svgScale;
+  const x0 = scoreTimeMsToX(0);
+  const x1 = scoreTimeMsToX(totalMs);
 
   window._cursorX0      = x0;
   window._cursorX1      = x1;
@@ -1841,8 +1841,7 @@ function beginPlay() {
     if (sessionPhase !== 'playing') return;
     const elapsedMs = performance.now() - animStartPN;
     if (elapsedMs < 0) { requestAnimationFrame(animCursor); return; }
-    const pct     = Math.min(1, elapsedMs / totalMs);
-    const cursorX = x0 + pct * (x1 - x0);
+    const cursorX = scoreTimeMsToX(Math.max(0, Math.min(totalMs, elapsedMs)));
     cursorEl.style.left = cursorX + 'px';
     if (elapsedMs < totalMs) {
       requestAnimationFrame(animCursor);
