@@ -1355,9 +1355,25 @@ function drawStaff() {
     } catch(e) { console.warn('tuplet draw error', e); }
   });
 
-  // VexFlow Stave の端座標を記録（SVG内部座標のまま。表示時にスケール変換する）
-  window._vfStaveX    = stave.getNoteStartX();
-  window._vfStaveEndX = stave.getNoteEndX ? stave.getNoteEndX() : SX + SW;
+  // 1拍目〜最終音符の実際のX座標を記録（SVG内部座標）
+  // カーソル・タップ線の基準として使う
+  try {
+    const firstNote = allNotes[0];
+    const lastNote  = allNotes[allNotes.length - 1];
+    window._vfFirstNoteX = firstNote ? firstNote.getAbsoluteX() : stave.getNoteStartX();
+    window._vfLastNoteX  = lastNote  ? lastNote.getAbsoluteX()  : SX + SW;
+    // 最後の音符の1音符分先を終端とする（最後の音符の右端）
+    const lastDur = lastNote ? lastNote.getWidth() : 20;
+    window._vfEndX = window._vfLastNoteX + lastDur;
+    // 後方互換
+    window._vfStaveX    = window._vfFirstNoteX;
+    window._vfStaveEndX = window._vfEndX;
+  } catch(e) {
+    window._vfStaveX    = stave.getNoteStartX();
+    window._vfStaveEndX = SX + SW;
+    window._vfFirstNoteX = window._vfStaveX;
+    window._vfEndX       = window._vfStaveEndX;
+  }
 }
 
 function makeNote(dur, isRest, VF, StaveNote, dotted) {
@@ -1469,9 +1485,11 @@ function tapRelMsToX(relMs, sheetWrap) {
   const totalMs    = totalDur * secPerBeat * 1000;
 
   // SVGスケールを考慮したnoteStart/noteEnd
+  // _vfFirstNoteX = 1拍目音符の中心X（SVG内部座標）
+  // _vfEndX       = 最終音符右端X（SVG内部座標）
   const scale     = getSvgScale();
-  const noteStart = window._vfStaveX    !== undefined ? window._vfStaveX    * scale : 80;
-  const noteEnd   = window._vfStaveEndX !== undefined ? window._vfStaveEndX * scale : (sheetWrap ? sheetWrap.clientWidth - 10 : 350);
+  const noteStart = (window._vfFirstNoteX !== undefined ? window._vfFirstNoteX : 80) * scale;
+  const noteEnd   = (window._vfEndX       !== undefined ? window._vfEndX       : 350) * scale;
 
   // 純粋な時間ベース線形補間
   const pct = Math.max(0, Math.min(1, relMs / totalMs));
