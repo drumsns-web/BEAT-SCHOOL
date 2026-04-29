@@ -1380,9 +1380,9 @@ function drawStaff() {
 
 function makeNote(dur, isRest, VF, StaveNote, dotted) {
   const sn = new StaveNote({
-    keys:           ['c/5'],  // パーカッション一線譜の中心位置
+    keys:           ['a/5'],  // 線より上に配置→符尾が必ず上向き
     duration:       dur,
-    stem_direction:  1,       // 1=符尾上向き（旗も上向きに）
+    stem_direction:  1,
     clef:           'percussion',
   });
   if (dotted && VF.Dot) {
@@ -1839,8 +1839,24 @@ function beginPlay() {
   const cursorEl = document.getElementById('cursorLine');
 
   // カーソルもタップ線も同じ「楽譜時刻→X座標」関数を使う
-  const x0 = scoreTimeMsToX(0);
-  const x1 = scoreTimeMsToX(totalMs);
+  // x0: 最初の実音符のX座標（休符は除く）
+  // x1: パターン終端のX座標
+  const scale0 = getSvgScale();
+  let x0, x1;
+  {
+    const xs = window._noteXPositions || [];
+    const ts = window._noteTimeMsMap  || [];
+    // 実音符の最初のX座標を探す
+    let firstX = null;
+    for (let i = 0; i < xs.length; i++) {
+      if (Number.isFinite(xs[i]) && Number.isFinite(ts[i])) {
+        firstX = xs[i] * scale0;
+        break;
+      }
+    }
+    x0 = firstX !== null ? firstX : scoreTimeMsToX(0);
+    x1 = scoreTimeMsToX(totalMs);
+  }
 
   window._cursorX0      = x0;
   window._cursorX1      = x1;
