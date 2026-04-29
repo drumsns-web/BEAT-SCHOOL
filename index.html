@@ -1322,7 +1322,7 @@ function drawStaff() {
     _timeSec += dur * _secPerBeat;
   });
 
-  // ── Beam: 連符以外の8分・16分をまとめてBeam.generateBeamsに渡す ──
+  // ── Beam: 連符以外の8分・16分をビームでまとめる ──
   const tupletNoteSet = new Set(tupletDefs.flatMap(g => g.notes));
   const beamableNotes = allNotes.filter(n => {
     if (n.isRest()) return false;
@@ -1330,11 +1330,9 @@ function drawStaff() {
     const d = n.getDuration();
     return d === '8' || d === '16';
   });
-  // 1拍ごとにグループを分けてBeamを生成
-  const beams = Beam.generateBeams(beamableNotes, {
-    stem_direction: 1,
-    groups: buildBeatGroups(lv.timeSig),
-  });
+  // 手動でビームグループを作成（1拍単位）
+  // 連続する音符を拍の境界で区切ってBeamを生成
+  const beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
   beams.forEach(b => b.setContext(ctx).draw());
 
   // ── 連符: Beam + Tuplet ──
@@ -1375,13 +1373,43 @@ function makeNote(dur, isRest, VF, StaveNote, dotted) {
   return sn;
 }
 
-// 拍グループ（Beam.generateBeamsのgroups引数）
-function buildBeatGroups(timeSig) {
-  // 4拍子なら [2, 2]（1拍=8分2個分ずつ）など
-  // VexFlowはVF.Fractionで指定
+// 手動ビームグループ作成
+// 全音符リストの中でbeamableNotesを1拍ずつに区切ってBeamオブジェクトを生成
+function makeBeamGroups(beamableNotes, allNotes, pattern, timeSig) {
+  if (beamableNotes.length === 0) return [];
   const VF = Vex.Flow;
-  // デフォルトで1拍ずつグループ化
-  return Array.from({ length: timeSig }, () => new VF.Fraction(1, 4));
+  const beams = [];
+
+  // allNotes内でのbeamableNotesの位置から拍境界を計算
+  // 各音符のpatIdx → 拍位置（何拍目か）
+  const secPerBeat = 60 / bpm;
+  let beatPos = 0; // 累積拍数
+  const noteBeats = {}; // patIdx → 累積拍数
+  pattern.forEach((n, i) => {
+    noteBeats[i] = beatPos;
+    beatPos += NOTE_DUR[n.t] || 1;
+  });
+
+  // beamableNotesを拍単位でグループ化
+  // 同じ整数拍に属する音符をまとめる
+  const groups = {}; // beatIndex → [StaveNote]
+  beamableNotes.forEach(sn => {
+    const bi = Math.floor(noteBeats[sn._patIdx] + 0.001); // 何拍目か（0始まり）
+    if (!groups[bi]) groups[bi] = [];
+    groups[bi].push(sn);
+  });
+
+  // 各グループでBeamを作成（2音符以上あるもの）
+  Object.values(groups).forEach(grp => {
+    if (grp.length >= 2) {
+      try {
+        const beam = new VF.Beam(grp, true);
+        beams.push(beam);
+      } catch(e) { console.warn('beam error', e); }
+    }
+  });
+
+  return beams;
 }
 
 
