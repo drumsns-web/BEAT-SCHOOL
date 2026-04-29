@@ -1447,7 +1447,7 @@ function showTapLine(tapRelMs) {
   // タップ直後に強調フラッシュ
   const sheetWrap = document.getElementById('sheetWrap');
   if (!sheetWrap) return;
-  const lineX = tapRelMsToX(tapRelMs, sheetWrap);
+  const lineX = tapRelMsToX(tapRelMs);
   const flash = document.createElement('div');
   flash.style.cssText = `
     position:absolute;
@@ -1512,7 +1512,7 @@ function _renderTapLayer(showExpected) {
 
   // タップ線（赤）
   _tapLineData.forEach(d => {
-    const x   = tapRelMsToX(d.relMs, sheetWrap);
+    const x   = tapRelMsToX(d.relMs);
     const el  = document.createElement('div');
     el.className = 'tap-line-persist';
     el.style.cssText = `
@@ -1531,7 +1531,7 @@ function _renderTapLayer(showExpected) {
   // 期待ビート線（黒点線）
   if (showExpected && expectedBeats.length > 0) {
     expectedBeats.forEach(b => {
-      const x  = beatMsToX(b.timeMs, sheetWrap);
+      const x  = beatMsToX(b.timeMs);
       const el = document.createElement('div');
       el.className = 'tap-line-persist';
       el.style.cssText = `
@@ -1811,26 +1811,39 @@ function beginPlay() {
     playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
   }
 
-  // ★ バーアニメーション: acとpnを同時取得してAudioCtxと正確に同期
-  const acAtBeginPlay = ac.currentTime;
-  const pnAtBeginPlay = performance.now();
-  // patternStartAC に対応するperformance.now時刻を計算
-  const cursorStartPN = pnAtBeginPlay + (patternStartAC - acAtBeginPlay) * 1000;
+  // ★ バーアニメーション
+  // ac と performance.now を同時取得してpatternStartACと対応付ける
+  const acAtBeginPlay  = ac.currentTime;
+  const pnAtBeginPlay  = performance.now();
+  // patternStartAC に対応する performance.now 時刻
+  const cursorStartPN  = pnAtBeginPlay + (patternStartAC - acAtBeginPlay) * 1000;
 
-  const cursorEl = document.getElementById('cursorLine');
-  const sheetWrap = document.getElementById('sheetWrap');
-  const sheetW = sheetWrap.clientWidth - 20;
-  const noteAreaStart = 58;
-  const noteAreaEnd = sheetW - 14;
+  const cursorEl  = document.getElementById('cursorLine');
+  const container = document.getElementById('atContainer');
+
+  // ── 音符の表示X座標をここで確定（一度だけSVGスケール計算） ──
+  const svgEl  = container ? container.querySelector('svg') : null;
+  const svgIntW = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
+  const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : 0;
+  const svgScale = (svgIntW > 0 && svgDispW > 0) ? svgDispW / svgIntW : 1;
+
+  // 1拍目音符のCSS X座標と最終音符右端のCSS X座標
+  const x0 = (window._vfFirstNoteX || 80) * svgScale;   // 1拍目音符中心
+  const x1 = (window._vfEndX       || 350) * svgScale;   // 最終音符右端
+
+  // グローバルに保存（tapRelMsToXから使う）
+  window._cursorX0    = x0;
+  window._cursorX1    = x1;
+  window._cursorTotalMs = totalMs;
   cursorEl.style.display = 'block';
-  cursorEl.style.left = noteAreaStart + 10 + 'px';
+  cursorEl.style.left    = x0 + 'px';
 
-  const sheetWrapEl = document.getElementById('sheetWrap');
   function animCursor() {
     if (sessionPhase !== 'playing') return;
-    const nowMs     = performance.now();
-    const elapsedMs = nowMs - cursorStartPN;
-    const cursorX   = tapRelMsToX(elapsedMs, sheetWrapEl);
+    // patternStartPNからの経過ms（これがAudioCtxと同期している）
+    const elapsedMs = performance.now() - cursorStartPN;
+    const pct    = Math.max(0, Math.min(1, elapsedMs / totalMs));
+    const cursorX = x0 + pct * (x1 - x0);
     cursorEl.style.left = cursorX + 'px';
 
     if (elapsedMs < totalMs) {
@@ -1840,7 +1853,6 @@ function beginPlay() {
       setTimeout(evalSession, 200);
     }
   }
-  cursorEl.style.left = tapRelMsToX(0, sheetWrapEl) + 'px';
   requestAnimationFrame(animCursor);
 
   // フォールバック終了タイマー
