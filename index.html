@@ -1241,6 +1241,7 @@ function drawStaff() {
   const tupletDefs = [];   // { notes: [], n: number } 連符グループ
 
   let pi = 0;
+  let patIdx = 0; // pattern配列のインデックス（patternResultsと対応）
   while (pi < pattern.length) {
     const t = pattern[pi].t;
     const isRest = (t === 'r' || t === 'er' || t === 'sr');
@@ -1248,14 +1249,14 @@ function drawStaff() {
     const dur    = DUR_MAP[t] || 'q';
 
     if (tupN) {
-      // 連符グループを収集
       const grpNotes = [];
       let cnt = 0;
       while (pi < pattern.length && pattern[pi].t === t && cnt < tupN) {
         const sn = makeNote(dur, isRest, VF, StaveNote);
+        sn._patIdx = patIdx; // patternResultsとの対応用
         grpNotes.push(sn);
         allNotes.push(sn);
-        pi++; cnt++;
+        pi++; patIdx++; cnt++;
       }
       if (grpNotes.length > 0) {
         tupletDefs.push({ notes: grpNotes, n: tupN,
@@ -1263,8 +1264,9 @@ function drawStaff() {
       }
     } else {
       const sn = makeNote(dur, isRest, VF, StaveNote, DOTS[t]);
+      sn._patIdx = patIdx;
       allNotes.push(sn);
-      pi++;
+      pi++; patIdx++;
     }
   }
 
@@ -1280,6 +1282,21 @@ function drawStaff() {
   } catch(e) {
     try { new Formatter().formatToStave([voice], stave); } catch(e2) {}
   }
+
+  // ── 採点結果の色をStaveNoteに適用 ──
+  allNotes.forEach((sn) => {
+    const res = patternResults[sn._patIdx];
+    if (!res) return;
+    const col = NOTE_COLORS[res] || '#1a1408';
+    try {
+      sn.setStyle({ fillStyle: col, strokeStyle: col });
+      if (sn.stem) sn.stem.setStyle({ fillStyle: col, strokeStyle: col });
+      // 音符頭にも色を適用
+      if (sn.noteHeads) sn.noteHeads.forEach(nh => {
+        try { nh.setStyle({ fillStyle: col, strokeStyle: col }); } catch(e) {}
+      });
+    } catch(e) {}
+  });
 
   // ── Voice描画 ──
   voice.draw(ctx, stave);
