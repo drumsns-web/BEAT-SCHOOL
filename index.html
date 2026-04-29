@@ -1812,43 +1812,20 @@ function beginPlay() {
     playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
   }
 
-  // ★ バーアニメーション
-  const cursorEl = document.getElementById('cursorLine');
-  const sheetWrapEl = document.getElementById('sheetWrap');
-  const wrapW = sheetWrapEl ? sheetWrapEl.clientWidth : 400;
-
-  // VexFlowのSVGレイアウトを実測して座標を取得
-  // getAbsoluteX()はSVG内部座標なので、SVGの表示スケールをかける
-  const svgEl   = document.querySelector('#atContainer svg');
-  const svgIntW = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
-  const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : wrapW;
-  const scale   = svgIntW > 1 ? svgDispW / svgIntW : 1;
-
-  // 1拍目音符と最終音符のCSS座標
-  let x0, x1;
-  try {
-    const allVfNotes = window._allVfNotes || [];
-    const realNotes  = allVfNotes.filter(n => {
-      try { return n && !n.isRest() && typeof n.getAbsoluteX === 'function'; }
-      catch(e) { return false; }
-    });
-    if (realNotes.length >= 1) {
-      x0 = realNotes[0].getAbsoluteX() * scale;
-      x1 = realNotes[realNotes.length - 1].getAbsoluteX() * scale + 8 * scale;
-    } else {
-      x0 = wrapW * 0.20;
-      x1 = wrapW * 0.97;
-    }
-  } catch(e) {
-    x0 = wrapW * 0.20;
-    x1 = wrapW * 0.97;
-  }
+  // ★ バーアニメーション - シンプルに幅だけで計算
+  const cursorEl    = document.getElementById('cursorLine');
+  const sheetRect   = document.getElementById('sheetWrap').getBoundingClientRect();
+  // x0: 譜面の左マージン（クレフ・拍子記号の幅分）
+  // x1: 譜面の右端マージン
+  // これらはVexFlowのレイアウトに関係なく固定値で十分
+  const x0 = sheetRect.width * 0.18;  // 左18%（クレフ+拍子記号の幅）
+  const x1 = sheetRect.width * 0.97;  // 右97%
 
   window._cursorX0      = x0;
   window._cursorX1      = x1;
   window._cursorTotalMs = totalMs;
 
-  // acとpnを同時取得してpatternStartACと対応付ける
+  // acとpnを同時取得してpatternStartACと正確に対応付ける
   const acNow       = ac.currentTime;
   const pnNow       = performance.now();
   const animStartPN = pnNow + (patternStartAC - acNow) * 1000;
