@@ -1205,141 +1205,143 @@ function drawStaff() {
   }
 
   const pattern = getPattern();
-  const lv = LEVELS[currentLevel];
-  const VF = Vex.Flow;
-  const { Renderer, Stave, StaveNote, Voice, Formatter, Beam, Tuplet, Annotation } = VF;
+  const lv      = LEVELS[currentLevel];
+  const VF      = Vex.Flow;
+  const { Renderer, Stave, StaveNote, Voice, Formatter, Beam, Tuplet } = VF;
 
-  // パターン → VexFlow音符変換
-  // NOTE_DUR マップ: 音符タイプ → {dur, dots, tupletN}
-  const DUR_MAP = {
-    q:   { dur: 'q',  dots: 0 },
-    h:   { dur: 'h',  dots: 0 },
-    w:   { dur: 'w',  dots: 0 },
-    'q.':{ dur: 'q',  dots: 1 },
-    e:   { dur: '8',  dots: 0 },
-    'e.':{ dur: '8',  dots: 1 },
-    s:   { dur: '16', dots: 0 },
-    r:   { dur: 'qr', dots: 0 },  // 四分休符
-    er:  { dur: '8r', dots: 0 },  // 八分休符
-    sr:  { dur: '16r',dots: 0 },  // 十六分休符
-    t:   { dur: '8',  dots: 0, tupletN: 3 },
-    p5:  { dur: '8',  dots: 0, tupletN: 5 },
-    p6:  { dur: '8',  dots: 0, tupletN: 6 },
-    p7:  { dur: '8',  dots: 0, tupletN: 7 },
-    p9:  { dur: '16', dots: 0, tupletN: 9 },
-  };
-
-  // containerの幅取得
-  const W = container.clientWidth || 360;
-  const SX = 10, SY = 30;
-  const SW = W - SX * 2;
+  const W  = Math.max(container.clientWidth || 360, 200);
+  const SX = 10, SY = 20;
+  const SW = W - SX * 2 - 4;
 
   const renderer = new Renderer(container, Renderer.Backends.SVG);
-  renderer.resize(W, 130);
+  renderer.resize(W, 110);
   const ctx = renderer.getContext();
-
-  // SVGスタイル
   const svg = container.querySelector('svg');
-  if (svg) svg.style.cssText = 'background:white;display:block;border-radius:4px;';
+  if (svg) svg.style.cssText = 'background:white;display:block;';
 
-  // Stave（1小節）
+  // ── 一線パーカッション譜 ──
   const stave = new Stave(SX, SY, SW);
   stave.addClef('percussion');
   stave.addTimeSignature(lv.timeSig + '/4');
+  stave.setNumLines(1);   // 一線譜
   stave.setContext(ctx).draw();
 
-  // 音符を生成
-  const vfNotes = [];
-  const tupletGroups = []; // { notes: StaveNote[], n: number }
+  // ── 音符タイプ → VexFlow duration 変換 ──
+  const DUR_MAP = {
+    q:    'q',   h:  'h',   w:  'w',
+    'q.': 'qd',  e:  '8',   s:  '16',
+    r:    'qr',  er: '8r',  sr: '16r',
+    t:    '8',   p5: '8',   p6: '8',   p7: '8',   p9: '16',
+  };
+  const TUPLET_N = { t:3, p5:5, p6:6, p7:7, p9:9 };
+  const DOTS = { 'q.': true };
 
-  let i = 0;
-  while (i < pattern.length) {
-    const note = pattern[i];
-    const dm = DUR_MAP[note.t];
-    if (!dm) { i++; continue; }
+  // ── 音符生成（連符グループを検出しながら順番に処理）──
+  const allNotes   = [];   // 全StaveNote（Voice用）
+  const tupletDefs = [];   // { notes: [], n: number } 連符グループ
 
-    const isRest = NOTE_IS_REST[note.t] || note.t === 'r';
-    const tupletN = dm.tupletN;
+  let pi = 0;
+  while (pi < pattern.length) {
+    const t = pattern[pi].t;
+    const isRest = (t === 'r' || t === 'er' || t === 'sr');
+    const tupN   = TUPLET_N[t];
+    const dur    = DUR_MAP[t] || 'q';
 
-    if (tupletN) {
+    if (tupN) {
       // 連符グループを収集
-      const groupNotes = [];
-      const groupType = note.t;
-      let count = 0;
-      while (i < pattern.length && pattern[i].t === groupType && count < tupletN) {
-        const gDm = DUR_MAP[pattern[i].t];
-        const sn = new StaveNote({
-          keys: ['b/4'],
-          duration: gDm.dur,
-          stem_direction: 1,
-          clef: 'percussion'
-        });
-        groupNotes.push(sn);
-        vfNotes.push(sn);
-        i++; count++;
+      const grpNotes = [];
+      let cnt = 0;
+      while (pi < pattern.length && pattern[pi].t === t && cnt < tupN) {
+        const sn = makeNote(dur, isRest, VF, StaveNote);
+        grpNotes.push(sn);
+        allNotes.push(sn);
+        pi++; cnt++;
       }
-      if (groupNotes.length === tupletN) {
-        tupletGroups.push({ notes: groupNotes, n: tupletN });
+      if (grpNotes.length > 0) {
+        tupletDefs.push({ notes: grpNotes, n: tupN,
+          beatsOccupied: (t === 'p9') ? 2 : 1 });
       }
     } else {
-      const dur = isRest ? dm.dur : dm.dur;
-      const sn = new StaveNote({
-        keys: [isRest ? 'b/4' : 'b/4'],
-        duration: dur,
-        stem_direction: 1,
-        clef: 'percussion'
-      });
-      if (dm.dots > 0) {
-        VF.Dot.buildAndAttach([sn]);
-      }
-      vfNotes.push(sn);
-      i++;
+      const sn = makeNote(dur, isRest, VF, StaveNote, DOTS[t]);
+      allNotes.push(sn);
+      pi++;
     }
   }
 
-  if (vfNotes.length === 0) return;
+  if (allNotes.length === 0) return;
 
-  // Voice
+  // ── Voice ──
   const voice = new Voice({ num_beats: lv.timeSig, beat_value: 4 }).setStrict(false);
-  voice.addTickables(vfNotes);
+  voice.addTickables(allNotes);
 
-  // Format & Draw
+  // ── Formatter ──
   try {
-    new Formatter().joinVoices([voice]).format([voice], SW - 80);
+    new Formatter().joinVoices([voice]).format([voice], SW - 90);
   } catch(e) {
-    new Formatter().formatToStave([voice], stave);
+    try { new Formatter().formatToStave([voice], stave); } catch(e2) {}
   }
 
-  // Beam（連符を除く八分・十六分）
-  const beamNotes = vfNotes.filter(n => {
-    const dur = n.getDuration();
-    return (dur === '8' || dur === '16') && !n.isRest();
-  });
-  // tupletに含まれる音符はBeam.generateBeamsで処理
-  const tupletNoteSet = new Set(tupletGroups.flatMap(g => g.notes));
-  const nonTupletBeamNotes = vfNotes.filter(n => {
-    return !n.isRest() && (n.getDuration() === '8' || n.getDuration() === '16') && !tupletNoteSet.has(n);
-  });
-
+  // ── Voice描画 ──
   voice.draw(ctx, stave);
 
-  // Beam描画
-  const beams = Beam.generateBeams(nonTupletBeamNotes, { stem_direction: 1 });
+  // ── Beam: 連符以外の8分・16分をまとめてBeam.generateBeamsに渡す ──
+  const tupletNoteSet = new Set(tupletDefs.flatMap(g => g.notes));
+  const beamableNotes = allNotes.filter(n => {
+    if (n.isRest()) return false;
+    if (tupletNoteSet.has(n)) return false;
+    const d = n.getDuration();
+    return d === '8' || d === '16';
+  });
+  // 1拍ごとにグループを分けてBeamを生成
+  const beams = Beam.generateBeams(beamableNotes, {
+    stem_direction: 1,
+    groups: buildBeatGroups(lv.timeSig),
+  });
   beams.forEach(b => b.setContext(ctx).draw());
 
-  // Tuplet描画（連符ビーム＋括弧数字）
-  tupletGroups.forEach(g => {
+  // ── 連符: Beam + Tuplet ──
+  tupletDefs.forEach(g => {
     try {
-      const beam = new Beam(g.notes);
-      beam.setContext(ctx).draw();
-      const tuplet = new Tuplet(g.notes, { num_notes: g.n, beats_occupied: g.n === 9 ? 2 : 1 });
-      tuplet.setContext(ctx).draw();
-    } catch(e) { console.warn('tuplet error', e); }
+      // 連符グループのビーム
+      if (g.notes.length >= 2 && !g.notes[0].isRest()) {
+        const tb = new Beam(g.notes, true);
+        tb.setContext(ctx).draw();
+      }
+      // 連符括弧
+      const tup = new Tuplet(g.notes, {
+        num_notes:       g.n,
+        beats_occupied:  g.beatsOccupied || 1,
+        location:        1,   // 符尾の上
+      });
+      tup.setContext(ctx).draw();
+    } catch(e) { console.warn('tuplet draw error', e); }
   });
 
-  // カーソル位置の記録（タップ判定用）
-  window._vfStaveX = stave.getX();
-  window._vfStaveW = stave.getWidth();
+  // VexFlow Stave の端座標を記録（カーソル用）
+  window._vfStaveX = stave.getNoteStartX();
+  window._vfStaveEndX = stave.getNoteEndX ? stave.getNoteEndX() : SX + SW;
+}
+
+function makeNote(dur, isRest, VF, StaveNote, dotted) {
+  const sn = new StaveNote({
+    keys:           ['b/4'],
+    duration:       dur,
+    stem_direction: 1,
+    clef:           'percussion',
+  });
+  if (dotted && VF.Dot) {
+    VF.Dot.buildAndAttach([sn]);
+  }
+  return sn;
+}
+
+// 拍グループ（Beam.generateBeamsのgroups引数）
+function buildBeatGroups(timeSig) {
+  // 4拍子なら [2, 2]（1拍=8分2個分ずつ）など
+  // VexFlowはVF.Fractionで指定
+  const VF = Vex.Flow;
+  // デフォルトで1拍ずつグループ化
+  return Array.from({ length: timeSig }, () => new VF.Fraction(1, 4));
 }
 
 
