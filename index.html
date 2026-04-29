@@ -667,8 +667,10 @@ input[type=range]::-webkit-slider-thumb {
   <div class="sheet-wrap" id="sheetWrap">
     <!-- AlphaTab譜面コンテナ -->
     <div id="atContainer"></div>
-    <!-- カーソル（Canvas上に重ねる） -->
+    <!-- カーソル -->
     <div class="cursor-line" id="cursorLine"></div>
+    <!-- タップ位置ライン（複数表示） -->
+    <div id="tapLineLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;"></div>
   </div>
 
   <!-- Feedback -->
@@ -1365,6 +1367,56 @@ function buildBeatGroups(timeSig) {
 
 
 // ============================================================
+// TAP VISUAL LINES
+// ============================================================
+const tapLineTimers = [];
+
+function showTapLine(tapRelMs) {
+  const sheetWrap = document.getElementById('sheetWrap');
+  const layer     = document.getElementById('tapLineLayer');
+  if (!layer || !sheetWrap) return;
+
+  // patternStartからの経過msをX座標に変換
+  const totalDur = getPattern().reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
+  const lv = LEVELS[currentLevel];
+  const secPerBeat = 60 / bpm;
+  const totalMs = totalDur * secPerBeat * 1000;
+
+  const wrapW = sheetWrap.clientWidth;
+  const noteStart = window._vfStaveX    !== undefined ? window._vfStaveX    : wrapW * 0.15;
+  const noteEnd   = window._vfStaveEndX !== undefined ? window._vfStaveEndX : wrapW * 0.97;
+  const noteW = noteEnd - noteStart;
+
+  // タップ時刻を0〜1の割合に変換
+  const pct = Math.max(0, Math.min(1, tapRelMs / totalMs));
+  const lineX = noteStart + pct * noteW;
+
+  // ライン要素を作成
+  const line = document.createElement('div');
+  line.className = 'tap-line';
+  line.style.left = lineX + 'px';
+  layer.appendChild(line);
+
+  // 少し遅らせてshowクラスを付ける（トランジション）
+  requestAnimationFrame(() => line.classList.add('show'));
+
+  // 2秒後にフェードアウトして削除
+  const timer = setTimeout(() => {
+    line.style.transition = 'opacity 0.4s';
+    line.style.opacity = '0';
+    setTimeout(() => line.remove(), 400);
+  }, 2000);
+  tapLineTimers.push(timer);
+}
+
+function clearTapLines() {
+  const layer = document.getElementById('tapLineLayer');
+  if (layer) layer.innerHTML = '';
+  tapLineTimers.forEach(t => clearTimeout(t));
+  tapLineTimers.length = 0;
+}
+
+// ============================================================
 // INPUT MODE (TAP / MIC)
 // ============================================================
 let inputMode = 'tap'; // 'tap' | 'mic'
@@ -1537,6 +1589,7 @@ function startSession() {
   getACtx();
   patternResults = [];
   tapLog = [];
+  clearTapLines();
   document.getElementById('dotsRow').innerHTML = '';
   document.getElementById('resultCard').style.display = 'none';
   document.getElementById('startBtn').textContent = '⏹ 停止';
@@ -1688,6 +1741,7 @@ function onHit() {
 
   playSnare();
   tapLog.push(tapRelMs);
+  showTapLine(tapRelMs);  // タップ位置を赤線で表示
 
   // 判定ウィンドウ
   const PERFECT_EARLY = 80,  PERFECT_LATE = 80;   // ±80ms でPERFECT
