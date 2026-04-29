@@ -1355,8 +1355,8 @@ function drawStaff() {
     } catch(e) { console.warn('tuplet draw error', e); }
   });
 
-  // VexFlow Stave の端座標を記録（カーソル用）
-  window._vfStaveX = stave.getNoteStartX();
+  // VexFlow Stave の端座標を記録（SVG内部座標のまま。表示時にスケール変換する）
+  window._vfStaveX    = stave.getNoteStartX();
   window._vfStaveEndX = stave.getNoteEndX ? stave.getNoteEndX() : SX + SW;
 }
 
@@ -1449,48 +1449,33 @@ function showTapLine(tapRelMs) {
   setTimeout(() => { flash.style.opacity = '0'; setTimeout(() => flash.remove(), 300); }, 400);
 }
 
-// タップ時刻 → X座標（音符の実座標ベースで補間）
+// SVGスケール比率を取得（VexFlow内部座標 → CSS表示座標）
+function getSvgScale() {
+  const container = document.getElementById('atContainer');
+  if (!container) return 1;
+  const svg = container.querySelector('svg');
+  if (!svg) return 1;
+  const svgW   = parseFloat(svg.getAttribute('width')  || svg.viewBox?.baseVal?.width  || 0);
+  const dispW  = svg.getBoundingClientRect().width;
+  return svgW > 0 && dispW > 0 ? dispW / svgW : 1;
+}
+
+// パターン全体のms → X座標（純粋な時間ベース線形補間）
+// VexFlowのSVG座標をCSS座標に変換してから使う
 function tapRelMsToX(relMs, sheetWrap) {
   const pattern    = getPattern();
   const secPerBeat = 60 / bpm;
+  const totalDur   = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
+  const totalMs    = totalDur * secPerBeat * 1000;
 
-  // 各音符のtimeMs（パターン開始からのms）とVexFlow実X座標のペア
-  const noteXMap = []; // { timeMs, x }
-  let timeSec = 0; // 経過秒
-  pattern.forEach((n, i) => {
-    const dur = NOTE_DUR[n.t] || 1; // 拍数
-    const x   = window._noteXPositions && window._noteXPositions[i] !== undefined
-                ? window._noteXPositions[i]
-                : null;
-    if (x !== null) {
-      // timeSec（秒）→ ms
-      noteXMap.push({ timeMs: timeSec * 1000, x });
-    }
-    timeSec += dur * secPerBeat; // 次音符の開始秒
-  });
+  // SVGスケールを考慮したnoteStart/noteEnd
+  const scale     = getSvgScale();
+  const noteStart = window._vfStaveX    !== undefined ? window._vfStaveX    * scale : 80;
+  const noteEnd   = window._vfStaveEndX !== undefined ? window._vfStaveEndX * scale : (sheetWrap ? sheetWrap.clientWidth - 10 : 350);
 
-  if (noteXMap.length === 0) {
-    // フォールバック：線形補間
-    const totalDur = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
-    const totalMs  = totalDur * secPerBeat * 1000;
-    const wrapW    = sheetWrap ? sheetWrap.clientWidth : 360;
-    const noteStart = window._vfStaveX    !== undefined ? window._vfStaveX    : wrapW * 0.15;
-    const noteEnd   = window._vfStaveEndX !== undefined ? window._vfStaveEndX : wrapW * 0.97;
-    return noteStart + Math.max(0, Math.min(1, relMs / totalMs)) * (noteEnd - noteStart);
-  }
-
-  // 前後の音符X座標を線形補間
-  if (relMs <= noteXMap[0].timeMs) return noteXMap[0].x;
-  if (relMs >= noteXMap[noteXMap.length-1].timeMs) return noteXMap[noteXMap.length-1].x;
-
-  for (let i = 0; i < noteXMap.length - 1; i++) {
-    const a = noteXMap[i], b = noteXMap[i+1];
-    if (relMs >= a.timeMs && relMs <= b.timeMs) {
-      const pct = (relMs - a.timeMs) / (b.timeMs - a.timeMs);
-      return a.x + pct * (b.x - a.x);
-    }
-  }
-  return noteXMap[noteXMap.length-1].x;
+  // 純粋な時間ベース線形補間
+  const pct = Math.max(0, Math.min(1, relMs / totalMs));
+  return noteStart + pct * (noteEnd - noteStart);
 }
 
 // 期待ビート位置 → X座標
@@ -1825,7 +1810,8 @@ function beginPlay() {
   const sheetWrapEl = document.getElementById('sheetWrap');
   function animCursor() {
     if (sessionPhase !== 'playing') return;
-    const elapsedMs = performance.now() - cursorStartPN;
+    const nowMs     = performance.now();
+    const elapsedMs = nowMs - cursorStartPN;
     const cursorX   = tapRelMsToX(elapsedMs, sheetWrapEl);
     cursorEl.style.left = cursorX + 'px';
 
@@ -1836,8 +1822,7 @@ function beginPlay() {
       setTimeout(evalSession, 200);
     }
   }
-  // カーソルを最初の音符位置から開始
-  cursorEl.style.left = (tapRelMsToX(0, sheetWrapEl)) + 'px';
+  cursorEl.style.left = tapRelMsToX(0, sheetWrapEl) + 'px';
   requestAnimationFrame(animCursor);
 
   // フォールバック終了タイマー
