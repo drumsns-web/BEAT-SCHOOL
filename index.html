@@ -974,6 +974,7 @@ let sessionPhase = 'idle';
 let patternStartAC = 0;
 let patternStartPN = 0;
 let countdownTimer = null;
+let lastInputEventMs = 0;
 
 // ============================================================
 // AUDIO
@@ -1477,24 +1478,56 @@ function getSvgScale() {
   return svgW > 0 && dispW > 0 ? dispW / svgW : 1;
 }
 
+// 楽譜上の時刻(ms) → X座標。VexFlowが実際に置いた音符位置を使う。
+// これで「カーソル」「タップ線」「判定用の期待位置」が同じ座標系になる。
+function scoreTimeMsToX(relMs) {
+  const scale = getSvgScale();
+  const xs = window._noteXPositions || [];
+  const ts = window._noteTimeMsMap || [];
+  const pattern = getPattern();
+  const secPerBeat = 60 / bpm;
+  const totalBeats = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
+  const totalMs = totalBeats * secPerBeat * 1000;
+
+  const fallbackStart = (window._vfFirstNoteX !== undefined ? window._vfFirstNoteX : 80) * scale;
+  const fallbackEnd   = (window._vfEndX       !== undefined ? window._vfEndX       : 350) * scale;
+  if (!xs.length || !ts.length) {
+    const pct = Math.max(0, Math.min(1, relMs / Math.max(1, totalMs)));
+    return fallbackStart + pct * (fallbackEnd - fallbackStart);
+  }
+
+  const points = [];
+  for (let i = 0; i < ts.length; i++) {
+    if (Number.isFinite(ts[i]) && Number.isFinite(xs[i])) {
+      points.push({ t: ts[i], x: xs[i] * scale });
+    }
+  }
+  if (!points.length) {
+    const pct = Math.max(0, Math.min(1, relMs / Math.max(1, totalMs)));
+    return fallbackStart + pct * (fallbackEnd - fallbackStart);
+  }
+  points.sort((a, b) => a.t - b.t);
+
+  // 開始前は1音目位置、終了後は終端へ。
+  if (relMs <= points[0].t) return points[0].x;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1];
+    if (relMs >= a.t && relMs <= b.t && b.t > a.t) {
+      const pct = (relMs - a.t) / (b.t - a.t);
+      return a.x + pct * (b.x - a.x);
+    }
+  }
+  const last = points[points.length - 1];
+  const endX = fallbackEnd;
+  const endT = Math.max(totalMs, last.t + 1);
+  const pct = Math.max(0, Math.min(1, (relMs - last.t) / (endT - last.t)));
+  return last.x + pct * (endX - last.x);
+}
+
 // パターン全体のms → X座標（純粋な時間ベース線形補間）
 // VexFlowのSVG座標をCSS座標に変換してから使う
 function tapRelMsToX(relMs, sheetWrap) {
-  const pattern    = getPattern();
-  const secPerBeat = 60 / bpm;
-  const totalDur   = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
-  const totalMs    = totalDur * secPerBeat * 1000;
-
-  // SVGスケールを考慮したnoteStart/noteEnd
-  // _vfFirstNoteX = 1拍目音符の中心X（SVG内部座標）
-  // _vfEndX       = 最終音符右端X（SVG内部座標）
-  const scale     = getSvgScale();
-  const noteStart = (window._vfFirstNoteX !== undefined ? window._vfFirstNoteX : 80) * scale;
-  const noteEnd   = (window._vfEndX       !== undefined ? window._vfEndX       : 350) * scale;
-
-  // 純粋な時間ベース線形補間
-  const pct = Math.max(0, Math.min(1, relMs / totalMs));
-  return noteStart + pct * (noteEnd - noteStart);
+  return scoreTimeMsToX(relMs);
 }
 
 // 期待ビート位置 → X座標
@@ -1773,24 +1806,12 @@ function startSession() {
     }, delayMs);
   }
 
-  // ★ 4拍目が鳴るタイミングでplayingに移行 & beginPlay()をスケジュール
-  // 4拍目 = countStartAC + 3 * secPerBeat
-  const beat4AC  = countStartAC + 3 * secPerBeat;
-  const beat4Pn  = acToPn(beat4AC);
-
-  // 4拍目クリックが鳴る直前にplayingにして、タップ受付開始
+  // パターン頭でplayingに移行し、同じ基準時刻でメトロノーム・カーソル開始
+  const beginDelay = patternStartPN - pnBase;
   setTimeout(() => {
     if (sessionPhase === 'idle') return;
     sessionPhase = 'playing';
     expectedBeats = buildExpectedBeats();
-    document.getElementById('feedbackMain').textContent = '4';
-    document.getElementById('feedbackSub').textContent  = '← ここから叩ける';
-  }, Math.max(0, beat4Pn - pnBase - 10));
-
-  // patternStart直前にbeginPlay（メトロノーム・カーソル開始）
-  const beginDelay = patternStartPN - pnBase - 30;
-  setTimeout(() => {
-    if (sessionPhase !== 'playing') return;
     beginPlay();
   }, Math.max(0, beginDelay));
 }
@@ -1815,13 +1836,7 @@ function beginPlay() {
   // ★ バーアニメーション
   const cursorEl = document.getElementById('cursorLine');
 
-  // SVGの実際の表示スケールを計算（内部座標→CSS座標）
-  const svgEl    = document.querySelector('#atContainer svg');
-  const svgIntW  = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
-  const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : 0;
-  const svgScale = (svgIntW > 1 && svgDispW > 1) ? svgDispW / svgIntW : 1;
-
-  // VexFlowのSVG内部座標をCSSピクセルに変換
+  // カーソルもタップ線も同じ「楽譜時刻→X座標」関数を使う
   const x0 = scoreTimeMsToX(0);
   const x1 = scoreTimeMsToX(totalMs);
 
@@ -1871,6 +1886,10 @@ function stopSession() {
 
 function onTap(e) {
   e.preventDefault();
+  // touchstart後にmousedownが続けて発火する端末で二重入力になるのを防ぐ
+  const nowEvt = performance.now();
+  if (nowEvt - lastInputEventMs < 80) return;
+  lastInputEventMs = nowEvt;
   if (sessionPhase !== 'playing') return;
   if (inputMode === 'mic') return; // micモード中はタップ無効
 
