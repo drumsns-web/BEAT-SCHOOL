@@ -1305,6 +1305,7 @@ function drawStaff() {
 
   // ── 各音符の実際のX座標を記録（カーソル・タップ線の正確な位置計算用）──
   // VexFlowが配置した音符頭の中心X座標を取得
+  window._allVfNotes    = allNotes; // カーソル用（描画後にgetAbsoluteX可能）
   window._noteXPositions = []; // index = pattern index, value = VexFlow X座標
   window._noteTimeMsMap  = []; // index = pattern index, value = timeMs
   const _secPerBeat = 60 / bpm;
@@ -1812,33 +1813,44 @@ function beginPlay() {
   }
 
   // ★ バーアニメーション
-  const cursorEl  = document.getElementById('cursorLine');
-  const container = document.getElementById('atContainer');
+  const cursorEl = document.getElementById('cursorLine');
+  const sheetWrapEl = document.getElementById('sheetWrap');
+  const wrapW = sheetWrapEl ? sheetWrapEl.clientWidth : 400;
 
-  // SVGスケールを一度だけ計算
-  const svgEl    = container ? container.querySelector('svg') : null;
-  const svgIntW  = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
-  const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : 0;
-  const svgScale = (svgIntW > 0 && svgDispW > 0) ? svgDispW / svgIntW : 1;
+  // VexFlowのSVGレイアウトを実測して座標を取得
+  // getAbsoluteX()はSVG内部座標なので、SVGの表示スケールをかける
+  const svgEl   = document.querySelector('#atContainer svg');
+  const svgIntW = svgEl ? parseFloat(svgEl.getAttribute('width') || '0') : 0;
+  const svgDispW = svgEl ? svgEl.getBoundingClientRect().width : wrapW;
+  const scale   = svgIntW > 1 ? svgDispW / svgIntW : 1;
 
-  // atContainerのsheetWrap内でのオフセットも加算
-  const sheetWrapEl  = document.getElementById('sheetWrap');
-  const atEl         = container;
-  const offsetX = (atEl && sheetWrapEl)
-    ? atEl.getBoundingClientRect().left - sheetWrapEl.getBoundingClientRect().left
-    : 0;
-  const x0 = (window._vfFirstNoteX || 80)  * svgScale + offsetX;
-  const x1 = (window._vfEndX       || 350) * svgScale + offsetX;
+  // 1拍目音符と最終音符のCSS座標
+  let x0, x1;
+  try {
+    const allVfNotes = window._allVfNotes || [];
+    const realNotes  = allVfNotes.filter(n => {
+      try { return n && !n.isRest() && typeof n.getAbsoluteX === 'function'; }
+      catch(e) { return false; }
+    });
+    if (realNotes.length >= 1) {
+      x0 = realNotes[0].getAbsoluteX() * scale;
+      x1 = realNotes[realNotes.length - 1].getAbsoluteX() * scale + 8 * scale;
+    } else {
+      x0 = wrapW * 0.20;
+      x1 = wrapW * 0.97;
+    }
+  } catch(e) {
+    x0 = wrapW * 0.20;
+    x1 = wrapW * 0.97;
+  }
 
   window._cursorX0      = x0;
   window._cursorX1      = x1;
   window._cursorTotalMs = totalMs;
 
-  // ★ beginPlay()が呼ばれた瞬間のACとPNを同時取得して対応付け
-  const acNow = ac.currentTime;
-  const pnNow = performance.now();
-  // patternStartACに対応するperformance.now
-  // (patternStartACはAudioCtxのスケジュール時刻なので未来の場合もある)
+  // acとpnを同時取得してpatternStartACと対応付ける
+  const acNow       = ac.currentTime;
+  const pnNow       = performance.now();
   const animStartPN = pnNow + (patternStartAC - acNow) * 1000;
 
   cursorEl.style.display = 'block';
@@ -1847,14 +1859,10 @@ function beginPlay() {
   function animCursor() {
     if (sessionPhase !== 'playing') return;
     const elapsedMs = performance.now() - animStartPN;
-    if (elapsedMs < 0) {
-      requestAnimationFrame(animCursor);
-      return;
-    }
+    if (elapsedMs < 0) { requestAnimationFrame(animCursor); return; }
     const pct     = Math.min(1, elapsedMs / totalMs);
     const cursorX = x0 + pct * (x1 - x0);
     cursorEl.style.left = cursorX + 'px';
-
     if (elapsedMs < totalMs) {
       requestAnimationFrame(animCursor);
     } else {
