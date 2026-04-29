@@ -1380,9 +1380,9 @@ function drawStaff() {
 
 function makeNote(dur, isRest, VF, StaveNote, dotted) {
   const sn = new StaveNote({
-    keys:           ['b/4'],
+    keys:           ['c/5'],  // パーカッション一線譜の中心位置
     duration:       dur,
-    stem_direction: -1,  // -1=上向き（VexFlow仕様）
+    stem_direction:  1,       // 1=符尾上向き（旗も上向きに）
     clef:           'percussion',
   });
   if (dotted && VF.Dot) {
@@ -1519,7 +1519,9 @@ function scoreTimeMsToX(relMs) {
   }
   const last = points[points.length - 1];
   const endX = fallbackEnd;
-  const endT = Math.max(totalMs, last.t + 1);
+  // totalMsを終端時刻として使う
+  const endT = totalMs;
+  if (endT <= last.t) return endX;
   const pct = Math.max(0, Math.min(1, (relMs - last.t) / (endT - last.t)));
   return last.x + pct * (endX - last.x);
 }
