@@ -1305,12 +1305,21 @@ function drawStaff() {
 
   // ── 各音符の実際のX座標を記録（カーソル・タップ線の正確な位置計算用）──
   // VexFlowが配置した音符頭の中心X座標を取得
-  window._noteXPositions = []; // index = pattern index, value = CSS x座標
+  window._noteXPositions = []; // index = pattern index, value = VexFlow X座標
+  window._noteTimeMsMap  = []; // index = pattern index, value = timeMs
+  const _secPerBeat = 60 / bpm;
+  let _timeSec = 0;
   allNotes.forEach(sn => {
     try {
-      const nx = sn.getAbsoluteX(); // VexFlow内部X（SVG座標）
+      const nx = sn.getAbsoluteX();
       window._noteXPositions[sn._patIdx] = nx;
     } catch(e) {}
+  });
+  // timeMsも記録（patternと同期）
+  pattern.forEach((n, i) => {
+    const dur = NOTE_DUR[n.t] || 1;
+    window._noteTimeMsMap[i] = _timeSec * 1000;
+    _timeSec += dur * _secPerBeat;
   });
 
   // ── Beam: 連符以外の8分・16分をまとめてBeam.generateBeamsに渡す ──
@@ -1417,18 +1426,19 @@ function tapRelMsToX(relMs, sheetWrap) {
   const pattern    = getPattern();
   const secPerBeat = 60 / bpm;
 
-  // 各音符のtimeMs と X座標のペアを作成
+  // 各音符のtimeMs（パターン開始からのms）とVexFlow実X座標のペア
   const noteXMap = []; // { timeMs, x }
-  let timeSec = 0;
+  let timeSec = 0; // 経過秒
   pattern.forEach((n, i) => {
-    const dur = NOTE_DUR[n.t] || 1;
+    const dur = NOTE_DUR[n.t] || 1; // 拍数
     const x   = window._noteXPositions && window._noteXPositions[i] !== undefined
                 ? window._noteXPositions[i]
                 : null;
     if (x !== null) {
-      noteXMap.push({ timeMs: timeSec * secPerBeat * 1000, x });
+      // timeSec（秒）→ ms
+      noteXMap.push({ timeMs: timeSec * 1000, x });
     }
-    timeSec += dur;
+    timeSec += dur * secPerBeat; // 次音符の開始秒
   });
 
   if (noteXMap.length === 0) {
@@ -1671,16 +1681,17 @@ function setBpm(v) {
 }
 
 function buildExpectedBeats() {
-  const pattern = getPattern();
+  const pattern    = getPattern();
   const secPerBeat = 60 / bpm;
-  let timeSec = 0;
+  let timeSec = 0; // パターン開始からの経過秒
   const beats = [];
   pattern.forEach((note, i) => {
     const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
-    const dur = NOTE_DUR[note.t] || 1;
-    // timeMs = patternStartACからの経過秒をmsに変換（オフセットなし）
+    const dur    = NOTE_DUR[note.t] || 1; // 拍数
+    // timeMs = パターン開始からの経過ms（秒に変換してからms）
+    // dur拍 × secPerBeat秒/拍 = 経過秒
     if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000, idx: i, dur });
-    timeSec += dur * secPerBeat;
+    timeSec += dur * secPerBeat; // 次の音符の開始時刻（秒）
   });
   return beats;
 }
@@ -1787,8 +1798,7 @@ function beginPlay() {
   function animCursor() {
     if (sessionPhase !== 'playing') return;
     const elapsedMs = performance.now() - cursorStartPN;
-    // 音符の実座標ベースでカーソル位置を計算
-    const cursorX = tapRelMsToX(elapsedMs, sheetWrapEl);
+    const cursorX   = tapRelMsToX(elapsedMs, sheetWrapEl);
     cursorEl.style.left = cursorX + 'px';
 
     if (elapsedMs < totalMs) {
@@ -1798,6 +1808,8 @@ function beginPlay() {
       setTimeout(evalSession, 200);
     }
   }
+  // カーソルを最初の音符位置から開始
+  cursorEl.style.left = (tapRelMsToX(0, sheetWrapEl)) + 'px';
   requestAnimationFrame(animCursor);
 
   // フォールバック終了タイマー
