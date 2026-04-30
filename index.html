@@ -1547,8 +1547,12 @@ function scoreTimeMsToX(relMs) {
 
 // パターン全体のms → X座標（純粋な時間ベース線形補間）
 // VexFlowのSVG座標をCSS座標に変換してから使う
-function tapRelMsToX(relMs, sheetWrap) {
-  return scoreTimeMsToX(relMs);
+function tapRelMsToX(relMs) {
+  const x0      = window._cursorX0      || 80;
+  const x1      = window._cursorX1      || 350;
+  const totalMs = window._cursorTotalMs || 1;
+  const pct = Math.max(0, Math.min(1, relMs / totalMs));
+  return x0 + pct * (x1 - x0);
 }
 
 // 期待ビート位置 → X座標
@@ -1860,12 +1864,15 @@ function beginPlay() {
   // ★ バーアニメーション
   const cursorEl = document.getElementById('cursorLine');
 
-  // カーソルもタップ線も同じ「楽譜時刻→X座標」関数を使う
-  const x0 = scoreTimeMsToX(0);
-  const x1 = scoreTimeMsToX(totalMs);
+  // SVGスケールを取得してx0/x1をCSS座標に変換
+  const _svgScale = getSvgScale();
+  // x0: 最初の実音符のX座標
+  // x1: Stave右端（SX+SW）のX座標
+  const _firstX = window._vfFirstNoteX != null ? window._vfFirstNoteX * _svgScale : 80;
+  const _endX   = window._vfEndX       != null ? window._vfEndX       * _svgScale : 350;
 
-  window._cursorX0      = x0;
-  window._cursorX1      = x1;
+  window._cursorX0      = _firstX;
+  window._cursorX1      = _endX;
   window._cursorTotalMs = totalMs;
 
   // ACとPNを同時取得してpatternStartACと正確に対応付ける
@@ -1874,13 +1881,15 @@ function beginPlay() {
   const animStartPN = pnNow + (patternStartAC - acNow) * 1000;
 
   cursorEl.style.display = 'block';
-  cursorEl.style.left    = x0 + 'px';
+  cursorEl.style.left    = _firstX + 'px';
 
   function animCursor() {
     if (sessionPhase !== 'playing') return;
     const elapsedMs = performance.now() - animStartPN;
     if (elapsedMs < 0) { requestAnimationFrame(animCursor); return; }
-    const cursorX = scoreTimeMsToX(Math.max(0, Math.min(totalMs, elapsedMs)));
+    // 純粋な線形補間（一定速度）
+    const pct     = Math.min(1, elapsedMs / totalMs);
+    const cursorX = _firstX + pct * (_endX - _firstX);
     cursorEl.style.left = cursorX + 'px';
     if (elapsedMs < totalMs) {
       requestAnimationFrame(animCursor);
@@ -1946,8 +1955,8 @@ function onHit() {
   showTapLine(tapRelMs);  // タップ位置を赤線で表示
 
   // 判定ウィンドウ
-  const PERFECT_EARLY = 80,  PERFECT_LATE = 80;   // ±80ms でPERFECT
-  const GOOD_EARLY    = 200, GOOD_LATE    = 160;   // 前方向は200msまで許容
+  const PERFECT_EARLY = 80,  PERFECT_LATE = 100;   // PERFECT判定
+  const GOOD_EARLY    = 250, GOOD_LATE    = 200;   // 前方向を広めに
 
   let bestDiff = 999999, bestB = null;
   expectedBeats.forEach(b => {
@@ -1975,8 +1984,8 @@ function evalSession() {
   document.getElementById('cursorLine').style.display = 'none';
   document.getElementById('startBtn').textContent = '▶ スタート';
 
-  const PERFECT_EARLY = 80,  PERFECT_LATE = 80;
-  const GOOD_EARLY    = 200, GOOD_LATE    = 160;
+  const PERFECT_EARLY = 80,  PERFECT_LATE = 100;
+  const GOOD_EARLY    = 250, GOOD_LATE    = 200;
   const pattern = getPattern();
   const usedTaps = new Set();
   const results = new Array(pattern.length).fill('m');
