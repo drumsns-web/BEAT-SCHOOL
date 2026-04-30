@@ -1821,6 +1821,14 @@ function startSession() {
   patternStartAC = countStartAC + countBeats * secPerBeat;
   patternStartPN = acToPn(patternStartAC);
 
+  // ★ メトロノームもここでスケジュール（beginPlayのsetTimeout遅延に依存しない）
+  const lv0 = LEVELS[currentLevel];
+  const pattern0 = getPattern();
+  const totalDurBeats0 = pattern0.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
+  for (let b = 0; b < Math.ceil(totalDurBeats0); b++) {
+    playClick(patternStartAC + b * secPerBeat, b % lv0.timeSig === 0);
+  }
+
   // UI数字表示
   for (let i = 0; i < countBeats; i++) {
     const delayMs = acToPn(countStartAC + i * secPerBeat) - pnBase;
@@ -1855,11 +1863,6 @@ function beginPlay() {
   const secPerBeat = 60 / bpm;
   const totalDurBeats = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
   const totalMs = totalDurBeats * secPerBeat * 1000;
-
-  // ★ メトロノームをパターン開始と同じタイムラインでスケジュール
-  for (let b = 0; b < Math.ceil(totalDurBeats); b++) {
-    playClick(patternStartAC + b * secPerBeat, b % lv.timeSig === 0);
-  }
 
   // ★ バーアニメーション
   const cursorEl = document.getElementById('cursorLine');
