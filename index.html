@@ -1279,11 +1279,36 @@ function drawStaff() {
   const voice = new Voice({ num_beats: lv.timeSig, beat_value: 4 }).setStrict(false);
   voice.addTickables(allNotes);
 
-  // ── Formatter ──
+  // ── Formatter: まず通常レイアウト ──
   try {
     new Formatter().joinVoices([voice]).format([voice], SW - 90);
   } catch(e) {
     try { new Formatter().formatToStave([voice], stave); } catch(e2) {}
+  }
+
+  // ── 時間比例で音符X座標を強制設定（グリッドと一致させる）──
+  // stave.getNoteStartX() = 音符開始X（clef/timesig除く）
+  // SW - (staveNoteStartX - SX) = 音符エリアの幅
+  {
+    const noteStartX = stave.getNoteStartX();
+    const noteEndX   = SX + SW - 10;
+    const noteAreaW  = noteEndX - noteStartX;
+    const totalDurMs = totalDurBeats * (60 / bpm) * 1000;
+
+    // 各音符の時刻に比例したX座標を計算して強制設定
+    let accumDur = 0;
+    allNotes.forEach(sn => {
+      const patNote = pattern[sn._patIdx];
+      const dur = patNote ? (NOTE_DUR[patNote.t] || 1) : 1;
+      // この音符の開始位置（拍数÷全拍数）
+      const pct = accumDur / totalDurBeats;
+      const targetX = noteStartX + pct * noteAreaW;
+      try {
+        // VexFlowのStaveNoteのX座標を強制設定
+        sn.setXShift(targetX - sn.getAbsoluteX());
+      } catch(e) {}
+      accumDur += dur;
+    });
   }
 
   // ── 全音符のstemを描画前に強制上向きにセット ──
