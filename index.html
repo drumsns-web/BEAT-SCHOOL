@@ -1367,9 +1367,8 @@ function drawStaff() {
     const lastNote  = allNotes[allNotes.length - 1];
     window._vfFirstNoteX = firstNote ? firstNote.getAbsoluteX() : stave.getNoteStartX();
     window._vfLastNoteX  = lastNote  ? lastNote.getAbsoluteX()  : SX + SW;
-    // 最後の音符の1音符分先を終端とする（最後の音符の右端）
-    const lastDur = lastNote ? lastNote.getWidth() : 20;
-    window._vfEndX = window._vfLastNoteX + lastDur;
+    // 終端X: Staveの右端を使う（最も確実）
+    window._vfEndX = SX + SW;
     // 後方互換
     window._vfStaveX    = window._vfFirstNoteX;
     window._vfStaveEndX = window._vfEndX;
@@ -1383,7 +1382,7 @@ function drawStaff() {
 
 function makeNote(dur, isRest, VF, StaveNote, dotted) {
   const sn = new StaveNote({
-    keys:           ['b/4'],
+    keys:           ['e/5'],  // 線より上→符尾が上向きになる
     duration:       dur,
     stem_direction:  1,
     clef:           'percussion',
@@ -1493,7 +1492,8 @@ function scoreTimeMsToX(relMs) {
   const totalMs = totalBeats * secPerBeat * 1000;
 
   const fallbackStart = (window._vfFirstNoteX !== undefined ? window._vfFirstNoteX : 80) * scale;
-  const fallbackEnd   = (window._vfEndX       !== undefined ? window._vfEndX       : 350) * scale;
+  // fallbackEndはStaveの右端（_vfEndX）をそのまま使う
+  const fallbackEnd   = (window._vfEndX !== undefined ? window._vfEndX : 350) * scale;
   if (!xs.length || !ts.length) {
     const pct = Math.max(0, Math.min(1, relMs / Math.max(1, totalMs)));
     return fallbackStart + pct * (fallbackEnd - fallbackStart);
@@ -1522,10 +1522,10 @@ function scoreTimeMsToX(relMs) {
   }
   const last = points[points.length - 1];
   const endX = fallbackEnd;
-  // 最後の音符以降: 全音符の平均速度（px/ms）で等速に進む
+  // 最後の音符以降: 全体の平均速度で等速に進む
   if (points.length >= 2) {
-    const first  = points[0];
-    const pxPerMs = (last.x - first.x) / Math.max(1, last.t - first.t);
+    const first   = points[0];
+    const pxPerMs = (endX - first.x) / Math.max(1, totalMs - first.t);
     return Math.min(last.x + pxPerMs * (relMs - last.t), endX);
   }
   return endX;
