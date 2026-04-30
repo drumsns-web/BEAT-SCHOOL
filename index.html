@@ -1286,6 +1286,20 @@ function drawStaff() {
     try { new Formatter().formatToStave([voice], stave); } catch(e2) {}
   }
 
+  // ── 全音符のstemを描画前に強制上向きにセット ──
+  allNotes.forEach(sn => {
+    try {
+      if (!sn.isRest()) {
+        sn.setStemDirection(1); // 1=上向き
+      }
+    } catch(e) {}
+  });
+
+  // ── 全音符のstemを描画前に強制上向きにセット ──
+  allNotes.forEach(sn => {
+    try { if (!sn.isRest()) sn.setStemDirection(1); } catch(e) {}
+  });
+
   // ── 採点結果の色をStaveNoteに適用 ──
   allNotes.forEach((sn) => {
     const res = patternResults[sn._patIdx];
@@ -1335,16 +1349,10 @@ function drawStaff() {
     const d = n.getDuration();
     return d === '8' || d === '16';
   });
-  // VexFlow公式のBeam.generateBeamsを使う
-  // stem_direction=1（上向き）で統一、グループは拍単位
-  let beams = [];
-  if (beamableNotes.length > 0) {
-    try {
-      beams = Beam.generateBeams(beamableNotes, { stem_direction: 1 });
-    } catch(e) {
-      beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
-    }
-  }
+
+  // 手動ビームグループ（1拍単位）で作成
+  // Voice描画前にstem方向を強制上向きにする
+  const beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
   beams.forEach(b => b.setContext(ctx).draw());
 
   // ── 連符: Beam + Tuplet ──
@@ -1352,6 +1360,7 @@ function drawStaff() {
     try {
       // 連符グループのビーム
       if (g.notes.length >= 2 && !g.notes[0].isRest()) {
+        g.notes.forEach(n => { try { n.setStemDirection(1); } catch(e) {} });
         const tb = new Beam(g.notes);
         tb.setContext(ctx).draw();
       }
@@ -1430,9 +1439,15 @@ function makeBeamGroups(beamableNotes, allNotes, pattern, timeSig) {
   Object.values(groups).forEach(grp => {
     if (grp.length >= 2) {
       try {
+        // Beam作成前にstem方向を強制上向きに
+        grp.forEach(n => { try { n.setStemDirection(1); } catch(e) {} });
         const beam = new VF.Beam(grp);
         beams.push(beam);
       } catch(e) { console.warn('beam error', e); }
+    }
+    // 1音符だけのグループもstem上向きに（単独フラッグ）
+    if (grp.length === 1) {
+      try { grp[0].setStemDirection(1); } catch(e) {}
     }
   });
 
