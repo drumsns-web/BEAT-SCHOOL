@@ -1235,8 +1235,10 @@ function drawStaff() {
   const bracketY = stemTopY - 14;// 連符括弧Y
 
   // 音符エリア（クレフ・拍子記号の右から）
-  const areaX = 58;
-  const areaW = W - areaX - 12;
+  // 最初の音符に余白を持たせる
+  const clefW  = 48;  // クレフ+拍子記号の幅
+  const areaX  = clefW + 10; // 最初の音符の中心X
+  const areaW  = W - areaX - 16; // 音符エリア幅（右端に少し余白）
 
   // ── 時間比例でX座標を計算 ──
   // accumDur（拍数）に比例してX座標を決定
@@ -1262,11 +1264,14 @@ function drawStaff() {
   c.fillStyle  = '#1a1408';
   c.textAlign  = 'center';
   c.font = 'bold 18px serif';
-  c.fillText(String(lv.timeSig), 38, lineY - 2);
-  c.fillText('4', 38, lineY + 16);
+  c.fillText(String(lv.timeSig), 34, lineY - 2);
+  c.fillText('4', 34, lineY + 16);
+
+  // areaXに縦線（音符エリアの開始マーク、デバッグ用・実際は透明）
+  // c.strokeStyle = 'rgba(255,0,0,0.3)'; c.lineWidth=1;
+  // c.beginPath(); c.moveTo(areaX,lineY-20); c.lineTo(areaX,lineY+20); c.stroke();
 
   // ── 小節線 ──
-  c.lineWidth = 1.2;
   for (let beat = lv.timeSig; beat <= totalDur + 0.001; beat += lv.timeSig) {
     const bx = noteX(beat);
     const isLast = beat >= totalDur - 0.001;
@@ -1391,6 +1396,8 @@ function drawStaff() {
   });
 
   // ── カーソル用座標を記録 ──
+  // noteX(0) = areaX（最初の音符の中心）
+  // noteX(totalDur) = areaX + areaW（最後の音符の右端）
   window._vfFirstNoteX = areaX;
   window._vfEndX       = areaX + areaW;
 
