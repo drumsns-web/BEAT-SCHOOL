@@ -1154,7 +1154,6 @@ function findTripletGroups(beats) {
 // ビームグループを検出
 function findBeamGroups(beats, tripletGroups) {
   const tripletStarts = new Set(tripletGroups.map(g => g.start));
-  // 全インデックスを登録（5連符は5個分、7連符は7個分すべて）
   const tripletAll = new Set(
     tripletGroups.flatMap(g =>
       Array.from({length: g.end - g.start + 1}, (_, k) => g.start + k)
@@ -1162,35 +1161,56 @@ function findBeamGroups(beats, tripletGroups) {
   );
   const groups = [];
   let i = 0;
+  let accumDur = 0; // 累積拍数（拍境界の検出用）
+
   while (i < beats.length) {
     const b = beats[i];
-    if (b.isRest || b.type === 'q' || b.type === 'h' || b.type === 'w' || b.type === 'q.') { i++; continue; }
-    // 連符タイプ（t/p5/p7/p9）
+
+    if (b.isRest || b.type === 'q' || b.type === 'h' || b.type === 'w' || b.type === 'q.') {
+      accumDur += b.dur;
+      i++; continue;
+    }
+
+    // 連符タイプ
     if (b.type === 't' || b.type === 'p5' || b.type === 'p6' || b.type === 'p7' || b.type === 'p9') {
       if (tripletStarts.has(i)) {
         const g = tripletGroups.find(g => g.start === i);
         const noteIdxs = Array.from({length: g.end - g.start + 1}, (_, k) => g.start + k);
         groups.push({ type: b.type, notes: noteIdxs, beamCount:1, tupletNum: g.num });
+        // 累積拍数を更新
+        for (let k = i; k <= g.end; k++) accumDur += beats[k].dur;
         i = g.end + 1;
-      } else { i++; }
+      } else {
+        accumDur += b.dur;
+        i++;
+      }
       continue;
     }
-    // e or s: 1拍単位でグループ化（拍をまたいで繋がらない）
+
+    // e or s: 拍の境界で必ず切る
     const type = b.type;
-    if (type !== 'e' && type !== 's') { i++; continue; }
-    const maxBeats = 1.0; // 1グループは最大1拍分
-    const noteDur  = NOTE_DUR[type] || 0.5;
-    const start = i;
-    let accumulated = 0;
+    if (type !== 'e' && type !== 's') { accumDur += b.dur; i++; continue; }
+
+    const noteDur = NOTE_DUR[type] || 0.5;
+    const start   = i;
+    const startAccum = accumDur;
+    // この音符が属する拍の開始（小数点以下を切り捨て）
+    const beatStart = Math.floor(startAccum + 0.0001);
+    const beatEnd   = beatStart + 1; // この拍の終わり
+
+    let groupDur = 0;
     while (i < beats.length && beats[i].type === type && !beats[i].isRest) {
-      if (accumulated + noteDur > maxBeats + 0.001) break; // 1拍超えたら切る
-      accumulated += noteDur;
+      const nextAccum = accumDur + noteDur;
+      if (nextAccum > beatEnd + 0.0001) break; // 拍をまたいだら切る
+      accumDur = nextAccum;
+      groupDur += noteDur;
       i++;
     }
+
     if (i - start >= 2) {
       groups.push({ type, notes: Array.from({length:i-start},(_,k)=>start+k), beamCount: type==='s'?2:1 });
     }
-    // 1個だけなら単独（フラッグで描く）
+    // 1個だけなら単独フラッグ（追加不要）
   }
   return groups;
 }
