@@ -695,7 +695,7 @@ input[type=range]::-webkit-slider-thumb {
   </div>
 
   <div class="controls">
-    <button class="btn start" id="startBtn" onclick="startSession()">▶ スタート</button>
+    <button class="btn start" id="startBtn" onclick="startSession()" ontouchstart="event.preventDefault();startSession()">▶ スタート</button>
     <button class="btn listen-btn" onclick="listenPattern()">👂 聴く</button>
     <button class="btn next-btn" onclick="nextPattern()">→ 次のパターン</button>
     <button class="btn" id="weakBtn" onclick="toggleWeak()" style="border-color:var(--border);color:var(--muted);">☆ 苦手に追加</button>
@@ -1335,9 +1335,16 @@ function drawStaff() {
     const d = n.getDuration();
     return d === '8' || d === '16';
   });
-  // 手動でビームグループを作成（1拍単位）
-  // 連続する音符を拍の境界で区切ってBeamを生成
-  const beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
+  // VexFlow公式のBeam.generateBeamsを使う
+  // stem_direction=1（上向き）で統一、グループは拍単位
+  let beams = [];
+  if (beamableNotes.length > 0) {
+    try {
+      beams = Beam.generateBeams(beamableNotes, { stem_direction: 1 });
+    } catch(e) {
+      beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
+    }
+  }
   beams.forEach(b => b.setContext(ctx).draw());
 
   // ── 連符: Beam + Tuplet ──
@@ -1775,6 +1782,7 @@ function startSession() {
     return;
   }
   getACtx();
+  _beginPlayCalled = false;
   patternResults = [];
   tapLog = [];
   clearTapLines();
@@ -1823,8 +1831,10 @@ function startSession() {
   }, Math.max(0, beginDelay));
 }
 
+let _beginPlayCalled = false; // 多重呼び出し防止
 function beginPlay() {
-  // sessionPhaseはstartSession内で既にplayingに設定済み
+  if (_beginPlayCalled) return;
+  _beginPlayCalled = true;
   document.getElementById('feedbackMain').textContent = 'TAP!';
   document.getElementById('feedbackMain').className = 'feedback-main ready';
   document.getElementById('feedbackSub').textContent = '';
@@ -1882,6 +1892,7 @@ function beginPlay() {
 
 function stopSession() {
   sessionPhase = 'idle';
+  _beginPlayCalled = false;
   clearTimeout(countdownTimer);
   clearTimeout(gameTimer);
   document.getElementById('cursorLine').style.display = 'none';
