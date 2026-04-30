@@ -1306,22 +1306,25 @@ function drawStaff() {
 
   // ── 各音符の実際のX座標を記録（カーソル・タップ線の正確な位置計算用）──
   // VexFlowが配置した音符頭の中心X座標を取得
-  window._allVfNotes    = allNotes; // カーソル用（描画後にgetAbsoluteX可能）
-  window._noteXPositions = []; // index = pattern index, value = VexFlow X座標
-  window._noteTimeMsMap  = []; // index = pattern index, value = timeMs
-  const _secPerBeat = 60 / bpm;
-  let _timeSec = 0;
-  allNotes.forEach(sn => {
-    try {
-      const nx = sn.getAbsoluteX();
-      window._noteXPositions[sn._patIdx] = nx;
-    } catch(e) {}
-  });
-  // timeMsも記録（patternと同期）
+  window._allVfNotes = allNotes;
+  // 各音符の {timeMs, x} ペアを記録（scoreTimeMsToX用）
+  // patternと同じ順序で時刻を計算し、音符のX座標と対応付ける
+  const _secPerBeat2 = 60 / bpm;
+  let _timeSec2 = 0;
+  window._noteXPositions = [];
+  window._noteTimeMsMap  = [];
   pattern.forEach((n, i) => {
-    const dur = NOTE_DUR[n.t] || 1;
-    window._noteTimeMsMap[i] = _timeSec * 1000;
-    _timeSec += dur * _secPerBeat;
+    const dur    = NOTE_DUR[n.t] || 1;
+    const isRest = NOTE_IS_REST[n.t] || n.t === 'r';
+    // X座標はallNotesの対応するStaveNoteから取得
+    const sn = allNotes.find(s => s._patIdx === i);
+    if (sn && !isRest) {
+      try {
+        window._noteXPositions[i] = sn.getAbsoluteX();
+        window._noteTimeMsMap[i]  = _timeSec2 * 1000;
+      } catch(e) {}
+    }
+    _timeSec2 += dur * _secPerBeat2;
   });
 
   // ── Beam: 連符以外の8分・16分をビームでまとめる ──
@@ -1342,7 +1345,7 @@ function drawStaff() {
     try {
       // 連符グループのビーム
       if (g.notes.length >= 2 && !g.notes[0].isRest()) {
-        const tb = new Beam(g.notes, false);  // false=自動判定
+        const tb = new Beam(g.notes);
         tb.setContext(ctx).draw();
       }
       // 連符括弧（符尾上向き → 上に表示、数字のみ「3」）
@@ -1421,7 +1424,7 @@ function makeBeamGroups(beamableNotes, allNotes, pattern, timeSig) {
   Object.values(groups).forEach(grp => {
     if (grp.length >= 2) {
       try {
-        const beam = new VF.Beam(grp, true);
+        const beam = new VF.Beam(grp);
         beams.push(beam);
       } catch(e) { console.warn('beam error', e); }
     }
@@ -2061,6 +2064,7 @@ function listenPattern() {
 // PATTERN NAVIGATION
 // ============================================================
 function nextPattern() {
+  clearTapLines();
   if (weakPatternMode) {
     weakPatternIndex = (weakPatternIndex + 1) % weakPatterns.length;
     currentWeakPattern = weakPatterns[weakPatternIndex] ? weakPatterns[weakPatternIndex].pattern : null;
