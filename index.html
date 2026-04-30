@@ -1295,6 +1295,26 @@ function drawStaff() {
     } catch(e) {}
   });
 
+  // ── Beam: Voice描画前に作成（これで旗が自動的に消える）──
+  const tupletNoteSet = new Set(tupletDefs.flatMap(g => g.notes));
+  const beamableNotes = allNotes.filter(n => {
+    if (n.isRest()) return false;
+    if (tupletNoteSet.has(n)) return false;
+    const d = n.getDuration();
+    return d === '8' || d === '16';
+  });
+  const beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
+
+  // 連符ビームも事前作成
+  const tupletBeams = [];
+  tupletDefs.forEach(g => {
+    try {
+      if (g.notes.length >= 2 && !g.notes[0].isRest()) {
+        tupletBeams.push(new Beam(g.notes));
+      }
+    } catch(e) {}
+  });
+
   // ── 採点結果の色をStaveNoteに適用 ──
   allNotes.forEach((sn) => {
     const res = patternResults[sn._patIdx];
@@ -1303,21 +1323,17 @@ function drawStaff() {
     try {
       sn.setStyle({ fillStyle: col, strokeStyle: col });
       if (sn.stem) sn.stem.setStyle({ fillStyle: col, strokeStyle: col });
-      // 音符頭にも色を適用
       if (sn.noteHeads) sn.noteHeads.forEach(nh => {
         try { nh.setStyle({ fillStyle: col, strokeStyle: col }); } catch(e) {}
       });
     } catch(e) {}
   });
 
-  // ── Voice描画 ──
+  // ── Voice描画（この時点でBeamに含まれる音符の旗は自動削除）──
   voice.draw(ctx, stave);
 
-  // ── 各音符の実際のX座標を記録（カーソル・タップ線の正確な位置計算用）──
-  // VexFlowが配置した音符頭の中心X座標を取得
+  // ── 各音符のX座標を記録 ──
   window._allVfNotes = allNotes;
-  // 各音符の {timeMs, x} ペアを記録（scoreTimeMsToX用）
-  // patternと同じ順序で時刻を計算し、音符のX座標と対応付ける
   const _secPerBeat2 = 60 / bpm;
   let _timeSec2 = 0;
   window._noteXPositions = [];
@@ -1325,7 +1341,6 @@ function drawStaff() {
   pattern.forEach((n, i) => {
     const dur    = NOTE_DUR[n.t] || 1;
     const isRest = NOTE_IS_REST[n.t] || n.t === 'r';
-    // X座標はallNotesの対応するStaveNoteから取得
     const sn = allNotes.find(s => s._patIdx === i);
     if (sn && !isRest) {
       try {
@@ -1336,35 +1351,19 @@ function drawStaff() {
     _timeSec2 += dur * _secPerBeat2;
   });
 
-  // ── Beam: 連符以外の8分・16分をビームでまとめる ──
-  const tupletNoteSet = new Set(tupletDefs.flatMap(g => g.notes));
-  const beamableNotes = allNotes.filter(n => {
-    if (n.isRest()) return false;
-    if (tupletNoteSet.has(n)) return false;
-    const d = n.getDuration();
-    return d === '8' || d === '16';
-  });
-
-  // 手動ビームグループ（1拍単位）で作成
-  // Voice描画前にstem方向を強制上向きにする
-  const beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
+  // ── Beam描画 ──
   beams.forEach(b => b.setContext(ctx).draw());
+  tupletBeams.forEach(b => b.setContext(ctx).draw());
 
-  // ── 連符: Beam + Tuplet ──
+  // ── Tuplet括弧描画 ──
   tupletDefs.forEach(g => {
     try {
-      // 連符グループのビーム
-      if (g.notes.length >= 2 && !g.notes[0].isRest()) {
-        const tb = new Beam(g.notes);
-        tb.setContext(ctx).draw();
-      }
-      // 連符括弧（符尾上向き → 上に表示、数字のみ「3」）
       const tup = new Tuplet(g.notes, {
         num_notes:      g.n,
         beats_occupied: g.beatsOccupied || 1,
-        location:        1,      // 1=符尾側=上（stem_direction -1 で上向きなので）
-        ratioed:        false,   // 「3:2」ではなく「3」だけ表示
-        bracketed:      true,    // 括弧を表示
+        location:        1,
+        ratioed:        false,
+        bracketed:      true,
       });
       tup.setContext(ctx).draw();
     } catch(e) { console.warn('tuplet draw error', e); }
