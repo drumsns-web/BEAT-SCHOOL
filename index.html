@@ -1295,11 +1295,6 @@ function drawStaff() {
     } catch(e) {}
   });
 
-  // ── 全音符のstemを描画前に強制上向きにセット ──
-  allNotes.forEach(sn => {
-    try { if (!sn.isRest()) sn.setStemDirection(1); } catch(e) {}
-  });
-
   // ── 採点結果の色をStaveNoteに適用 ──
   allNotes.forEach((sn) => {
     const res = patternResults[sn._patIdx];
@@ -1360,7 +1355,6 @@ function drawStaff() {
     try {
       // 連符グループのビーム
       if (g.notes.length >= 2 && !g.notes[0].isRest()) {
-        g.notes.forEach(n => { try { n.setStemDirection(1); } catch(e) {} });
         const tb = new Beam(g.notes);
         tb.setContext(ctx).draw();
       }
@@ -1398,9 +1392,10 @@ function drawStaff() {
 
 function makeNote(dur, isRest, VF, StaveNote, dotted) {
   const sn = new StaveNote({
-    keys:           ['e/5'],  // 線より上→符尾が上向きになる
+    keys:           ['b/4'],
     duration:       dur,
     stem_direction:  1,
+    auto_stem:       false,   // VexFlowが自動で符尾方向を変えない
     clef:           'percussion',
   });
   if (dotted && VF.Dot) {
@@ -1439,8 +1434,6 @@ function makeBeamGroups(beamableNotes, allNotes, pattern, timeSig) {
   Object.values(groups).forEach(grp => {
     if (grp.length >= 2) {
       try {
-        // Beam作成前にstem方向を強制上向きに
-        grp.forEach(n => { try { n.setStemDirection(1); } catch(e) {} });
         const beam = new VF.Beam(grp);
         beams.push(beam);
       } catch(e) { console.warn('beam error', e); }
