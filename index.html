@@ -2,7 +2,6 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.2/build/cjs/vexflow.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.3.0/dist/alphaTab.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>リズム初見練習 — スネアトレーナー</title>
@@ -666,7 +665,7 @@ input[type=range]::-webkit-slider-thumb {
   <!-- Sheet -->
   <div class="sheet-wrap" id="sheetWrap">
     <!-- AlphaTab譜面コンテナ -->
-    <div id="atContainer"></div>
+    <div id="atContainer" style="line-height:0;"></div>
     <!-- カーソル -->
     <div class="cursor-line" id="cursorLine"></div>
     <!-- タップ位置ライン（複数表示） -->
@@ -1199,220 +1198,269 @@ function findBeamGroups(beats, tripletGroups) {
 function drawStaff() {
   const container = document.getElementById('atContainer');
   if (!container) return;
-  container.innerHTML = '';
-
-  if (typeof Vex === 'undefined') {
-    container.innerHTML = '<div style="padding:20px;color:#aaa;text-align:center;">VexFlow読込中...</div>';
-    setTimeout(drawStaff, 500);
-    return;
-  }
 
   const pattern = getPattern();
   const lv      = LEVELS[currentLevel];
-  const VF      = Vex.Flow;
-  const { Renderer, Stave, StaveNote, Voice, Formatter, Beam, Tuplet } = VF;
+  const totalDur = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
+  const secPerBeat = 60 / bpm;
 
-  const W  = Math.max(container.clientWidth || 360, 200);
-  const SX = 10, SY = 20;
-  const SW = W - SX * 2 - 4;
+  const W   = container.clientWidth || 360;
+  const H   = 160;
+  const DPR = window.devicePixelRatio || 2;
 
-  const renderer = new Renderer(container, Renderer.Backends.SVG);
-  renderer.resize(W, 110);
-  const ctx = renderer.getContext();
-  const svg = container.querySelector('svg');
-  if (svg) svg.style.cssText = 'background:white;display:block;';
+  // Canvasを作成（既存のcanvasを再利用または新規作成）
+  let canvas = container.querySelector('canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.style.cssText = 'display:block;width:100%;background:white;border-radius:4px;';
+    container.innerHTML = '';
+    container.appendChild(canvas);
+  }
+  canvas.width  = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
 
-  // ── 一線パーカッション譜 ──
-  const stave = new Stave(SX, SY, SW);
-  stave.addClef('percussion');
-  stave.addTimeSignature(lv.timeSig + '/4');
-  stave.setNumLines(1);   // 一線譜
-  stave.setContext(ctx).draw();
+  const c = canvas.getContext('2d');
+  c.scale(DPR, DPR);
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = 'white';
+  c.fillRect(0, 0, W, H);
 
-  // ── 音符タイプ → VexFlow duration 変換 ──
-  const DUR_MAP = {
-    q:    'q',   h:  'h',   w:  'w',
-    'q.': 'qd',  e:  '8',   s:  '16',
-    r:    'qr',  er: '8r',  sr: '16r',
-    t:    '8',   p5: '8',   p6: '8',   p7: '8',   p9: '16',
-  };
-  const TUPLET_N = { t:3, p5:5, p6:6, p7:7, p9:9 };
-  const DOTS = { 'q.': true };
+  // ── レイアウト定数 ──
+  const lineY    = 100;          // スタッフ線Y
+  const noteY    = lineY - 12;   // 音符頭Y（線の上）
+  const stemTopY = noteY - 32;   // 符尾上端
+  const beamY    = stemTopY + 3; // ビームY
+  const bracketY = stemTopY - 14;// 連符括弧Y
 
-  // ── 音符生成（連符グループを検出しながら順番に処理）──
-  const allNotes   = [];   // 全StaveNote（Voice用）
-  const tupletDefs = [];   // { notes: [], n: number } 連符グループ
+  // 音符エリア（クレフ・拍子記号の右から）
+  const areaX = 58;
+  const areaW = W - areaX - 12;
 
-  let pi = 0;
-  let patIdx = 0; // pattern配列のインデックス（patternResultsと対応）
-  while (pi < pattern.length) {
-    const t = pattern[pi].t;
-    const isRest = (t === 'r' || t === 'er' || t === 'sr');
-    const tupN   = TUPLET_N[t];
-    const dur    = DUR_MAP[t] || 'q';
+  // ── 時間比例でX座標を計算 ──
+  // accumDur（拍数）に比例してX座標を決定
+  function noteX(accumDur) {
+    return areaX + (accumDur / totalDur) * areaW;
+  }
 
-    if (tupN) {
-      const grpNotes = [];
-      let cnt = 0;
-      while (pi < pattern.length && pattern[pi].t === t && cnt < tupN) {
-        const sn = makeNote(dur, isRest, VF, StaveNote);
-        sn._patIdx = patIdx; // patternResultsとの対応用
-        grpNotes.push(sn);
-        allNotes.push(sn);
-        pi++; patIdx++; cnt++;
-      }
-      if (grpNotes.length > 0) {
-        tupletDefs.push({ notes: grpNotes, n: tupN,
-          beatsOccupied: (t === 'p9') ? 2 : 1 });
-      }
-    } else {
-      const sn = makeNote(dur, isRest, VF, StaveNote, DOTS[t]);
-      sn._patIdx = patIdx;
-      allNotes.push(sn);
-      pi++; patIdx++;
+  // ── スタッフ線（一線）──
+  c.strokeStyle = '#1a1408';
+  c.lineWidth   = 1.5;
+  c.beginPath();
+  c.moveTo(10, lineY);
+  c.lineTo(W - 10, lineY);
+  c.stroke();
+
+  // ── パーカッションクレフ（縦2本線）──
+  c.lineWidth = 4;
+  c.beginPath(); c.moveTo(14, lineY-20); c.lineTo(14, lineY+20); c.stroke();
+  c.lineWidth = 1.8;
+  c.beginPath(); c.moveTo(20, lineY-14); c.lineTo(20, lineY+14); c.stroke();
+
+  // ── 拍子記号 ──
+  c.fillStyle  = '#1a1408';
+  c.textAlign  = 'center';
+  c.font = 'bold 18px serif';
+  c.fillText(String(lv.timeSig), 38, lineY - 2);
+  c.fillText('4', 38, lineY + 16);
+
+  // ── 小節線 ──
+  c.lineWidth = 1.2;
+  for (let beat = lv.timeSig; beat <= totalDur + 0.001; beat += lv.timeSig) {
+    const bx = noteX(beat);
+    const isLast = beat >= totalDur - 0.001;
+    c.strokeStyle = '#1a1408';
+    c.lineWidth   = isLast ? 2.5 : 1.2;
+    c.beginPath(); c.moveTo(bx, lineY-16); c.lineTo(bx, lineY+16); c.stroke();
+    if (isLast) {
+      c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(bx+5, lineY-16); c.lineTo(bx+5, lineY+16); c.stroke();
     }
   }
 
-  if (allNotes.length === 0) return;
+  // ── グループ解析 ──
+  const tripletGroups = findTripletGroups(buildBeats(pattern));
+  const beamGroups    = findBeamGroups(buildBeats(pattern), tripletGroups);
+  const beamedSet     = new Set(beamGroups.flatMap(g => g.notes));
 
-  // ── Voice ──
-  const voice = new Voice({ num_beats: lv.timeSig, beat_value: 4 }).setStrict(false);
-  voice.addTickables(allNotes);
-
-  // ── Formatter: まず通常レイアウト ──
-  try {
-    new Formatter().joinVoices([voice]).format([voice], SW - 90);
-  } catch(e) {
-    try { new Formatter().formatToStave([voice], stave); } catch(e2) {}
-  }
-
-  // ── 時間比例で音符X座標を強制設定（グリッドと一致させる）──
-  // stave.getNoteStartX() = 音符開始X（clef/timesig除く）
-  // SW - (staveNoteStartX - SX) = 音符エリアの幅
-  {
-    const noteStartX = stave.getNoteStartX();
-    const noteEndX   = SX + SW - 10;
-    const noteAreaW  = noteEndX - noteStartX;
-    const totalDurMs = totalDurBeats * (60 / bpm) * 1000;
-
-    // 各音符の時刻に比例したX座標を計算して強制設定
-    let accumDur = 0;
-    allNotes.forEach(sn => {
-      const patNote = pattern[sn._patIdx];
-      const dur = patNote ? (NOTE_DUR[patNote.t] || 1) : 1;
-      // この音符の開始位置（拍数÷全拍数）
-      const pct = accumDur / totalDurBeats;
-      const targetX = noteStartX + pct * noteAreaW;
-      try {
-        // VexFlowのStaveNoteのX座標を強制設定
-        sn.setXShift(targetX - sn.getAbsoluteX());
-      } catch(e) {}
-      accumDur += dur;
-    });
-  }
-
-  // ── 全音符のstemを描画前に強制上向きにセット ──
-  allNotes.forEach(sn => {
-    try {
-      if (!sn.isRest()) {
-        sn.setStemDirection(1); // 1=上向き
-      }
-    } catch(e) {}
-  });
-
-  // ── Beam: Voice描画前に作成（これで旗が自動的に消える）──
-  const tupletNoteSet = new Set(tupletDefs.flatMap(g => g.notes));
-  const beamableNotes = allNotes.filter(n => {
-    if (n.isRest()) return false;
-    if (tupletNoteSet.has(n)) return false;
-    const d = n.getDuration();
-    return d === '8' || d === '16';
-  });
-  const beams = makeBeamGroups(beamableNotes, allNotes, pattern, lv.timeSig);
-
-  // 連符ビームも事前作成
-  const tupletBeams = [];
-  tupletDefs.forEach(g => {
-    try {
-      if (g.notes.length >= 2 && !g.notes[0].isRest()) {
-        tupletBeams.push(new Beam(g.notes));
-      }
-    } catch(e) {}
-  });
-
-  // ── 採点結果の色をStaveNoteに適用 ──
-  allNotes.forEach((sn) => {
-    const res = patternResults[sn._patIdx];
-    if (!res) return;
-    const col = NOTE_COLORS[res] || '#1a1408';
-    try {
-      sn.setStyle({ fillStyle: col, strokeStyle: col });
-      if (sn.stem) sn.stem.setStyle({ fillStyle: col, strokeStyle: col });
-      if (sn.noteHeads) sn.noteHeads.forEach(nh => {
-        try { nh.setStyle({ fillStyle: col, strokeStyle: col }); } catch(e) {}
-      });
-    } catch(e) {}
-  });
-
-  // ── Voice描画（この時点でBeamに含まれる音符の旗は自動削除）──
-  voice.draw(ctx, stave);
-
-  // ── 各音符のX座標を記録 ──
-  window._allVfNotes = allNotes;
-  const _secPerBeat2 = 60 / bpm;
-  let _timeSec2 = 0;
+  // ── 音符・休符を描く ──
+  let accumDur = 0;
   window._noteXPositions = [];
   window._noteTimeMsMap  = [];
-  pattern.forEach((n, i) => {
-    const dur    = NOTE_DUR[n.t] || 1;
-    const isRest = NOTE_IS_REST[n.t] || n.t === 'r';
-    const sn = allNotes.find(s => s._patIdx === i);
-    if (sn && !isRest) {
-      try {
-        window._noteXPositions[i] = sn.getAbsoluteX();
-        window._noteTimeMsMap[i]  = _timeSec2 * 1000;
-      } catch(e) {}
+
+  pattern.forEach((note, i) => {
+    const dur    = NOTE_DUR[note.t] || 1;
+    const isRest = NOTE_IS_REST[note.t] || note.t === 'r';
+    const hx     = noteX(accumDur);
+    const res    = patternResults[i];
+    const col    = res ? (NOTE_COLORS[res] || '#1a1408') : '#1a1408';
+
+    // X座標・時刻を記録
+    if (!isRest) {
+      window._noteXPositions[i] = hx;
+      window._noteTimeMsMap[i]  = accumDur * secPerBeat * 1000;
     }
-    _timeSec2 += dur * _secPerBeat2;
+
+    if (isRest) {
+      drawRestCanvas(c, note.t, hx, lineY, col);
+    } else {
+      // 音符頭
+      const rx = (note.t === 's' || note.t === 't' ||
+                  note.t === 'p5' || note.t === 'p6' ||
+                  note.t === 'p7' || note.t === 'p9') ? 5 : 6;
+      const filled = (note.t !== 'h' && note.t !== 'w');
+
+      // 音符頭（楕円）
+      c.beginPath();
+      c.ellipse(hx, noteY, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
+      c.fillStyle   = filled ? col : 'white';
+      c.strokeStyle = col;
+      c.lineWidth   = 1.5;
+      c.fill(); c.stroke();
+
+      // 符尾（上向き）
+      if (note.t !== 'w') {
+        const sx = hx + rx;
+        c.strokeStyle = col;
+        c.lineWidth   = 1.8;
+        c.beginPath();
+        c.moveTo(sx, noteY - rx * 0.7);
+        c.lineTo(sx, stemTopY);
+        c.stroke();
+
+        // 単独フラッグ（ビームなし）
+        if (!beamedSet.has(i)) {
+          if (note.t === 'e') drawFlag(c, sx, stemTopY, 1, col);
+          if (note.t === 's') drawFlag(c, sx, stemTopY, 2, col);
+          if (note.t === 't' || note.t === 'p5' || note.t === 'p6' ||
+              note.t === 'p7' || note.t === 'p9') drawFlag(c, sx, stemTopY, 1, col);
+        }
+      }
+
+      // 付点
+      if (note.t.includes('.')) {
+        c.fillStyle = col;
+        c.beginPath();
+        c.arc(hx + rx + 4, noteY - 3, 2.5, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+
+    accumDur += dur;
   });
 
-  // ── Beam描画 ──
-  beams.forEach(b => b.setContext(ctx).draw());
-  tupletBeams.forEach(b => b.setContext(ctx).draw());
+  // ── ビームを描く ──
+  beamGroups.forEach(g => {
+    const nx = g.notes;
+    const getStemX = (i) => {
+      const n = pattern[i];
+      const rx = (n && (n.t === 's' || n.t === 't' || n.t === 'p5' ||
+                        n.t === 'p6' || n.t === 'p7' || n.t === 'p9')) ? 5 : 6;
+      let acc = 0;
+      for (let j = 0; j < i; j++) acc += NOTE_DUR[pattern[j].t] || 1;
+      return noteX(acc) + rx;
+    };
+    const x1 = getStemX(nx[0]);
+    const x2 = getStemX(nx[nx.length - 1]);
 
-  // ── Tuplet括弧描画 ──
-  tupletDefs.forEach(g => {
-    try {
-      const tup = new Tuplet(g.notes, {
-        num_notes:      g.n,
-        beats_occupied: g.beatsOccupied || 1,
-        location:        1,
-        ratioed:        false,
-        bracketed:      true,
-      });
-      tup.setContext(ctx).draw();
-    } catch(e) { console.warn('tuplet draw error', e); }
+    const res = patternResults[nx[0]];
+    const col = res ? (NOTE_COLORS[res] || '#1a1408') : '#1a1408';
+
+    c.strokeStyle = col;
+    c.lineWidth   = 4;
+    c.lineCap     = 'square';
+    c.beginPath(); c.moveTo(x1, beamY); c.lineTo(x2, beamY); c.stroke();
+    if (g.beamCount >= 2) {
+      c.beginPath(); c.moveTo(x1, beamY + 5); c.lineTo(x2, beamY + 5); c.stroke();
+    }
+    c.lineCap = 'butt'; c.lineWidth = 1;
+
+    // 連符括弧
+    if (g.type === 't' || g.type === 'p5' || g.type === 'p6' ||
+        g.type === 'p7' || g.type === 'p9') {
+      let acc0 = 0;
+      for (let j = 0; j < nx[0]; j++) acc0 += NOTE_DUR[pattern[j].t] || 1;
+      const bx1 = noteX(acc0);
+      let acc1 = 0;
+      for (let j = 0; j <= nx[nx.length-1]; j++) acc1 += NOTE_DUR[pattern[j].t] || 1;
+      const bx2 = noteX(acc1 - (NOTE_DUR[pattern[nx[nx.length-1]].t] || 1)) + 10;
+      const num = g.tupletNum || (g.type==='t'?3:g.type==='p5'?5:g.type==='p6'?6:g.type==='p7'?7:9);
+      drawTupletBracket(c, bx1, bx2, bracketY, num);
+    }
   });
 
-  // 1拍目〜最終音符の実際のX座標を記録（SVG内部座標）
-  // カーソル・タップ線の基準として使う
-  try {
-    const firstNote = allNotes[0];
-    const lastNote  = allNotes[allNotes.length - 1];
-    window._vfFirstNoteX = firstNote ? firstNote.getAbsoluteX() : stave.getNoteStartX();
-    window._vfLastNoteX  = lastNote  ? lastNote.getAbsoluteX()  : SX + SW;
-    // 終端X: Staveの右端を使う（最も確実）
-    window._vfEndX = SX + SW;
-    // 後方互換
-    window._vfStaveX    = window._vfFirstNoteX;
-    window._vfStaveEndX = window._vfEndX;
-  } catch(e) {
-    window._vfStaveX    = stave.getNoteStartX();
-    window._vfStaveEndX = SX + SW;
-    window._vfFirstNoteX = window._vfStaveX;
-    window._vfEndX       = window._vfStaveEndX;
+  // ── カーソル用座標を記録 ──
+  window._vfFirstNoteX = areaX;
+  window._vfEndX       = areaX + areaW;
+
+  // SVGスケールは1（CanvasはCSS座標と一致）
+  window._canvasIsNative = true;
+}
+
+function drawFlag(c, x, y, count, col) {
+  c.strokeStyle = col;
+  c.lineWidth   = 1.6;
+  for (let f = 0; f < count; f++) {
+    const fy = y + f * 7;
+    c.beginPath();
+    c.moveTo(x, fy);
+    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
+    c.stroke();
   }
 }
+
+function drawTupletBracket(c, x1, x2, y, num) {
+  const mid = (x1 + x2) / 2;
+  c.font = 'bold 12px sans-serif';
+  const gap = c.measureText(String(num)).width / 2 + 3;
+  c.strokeStyle = '#333';
+  c.lineWidth   = 1.2;
+  c.beginPath(); c.moveTo(x1, y+6); c.lineTo(x1, y); c.lineTo(mid-gap, y); c.stroke();
+  c.beginPath(); c.moveTo(mid+gap, y); c.lineTo(x2, y); c.lineTo(x2, y+6); c.stroke();
+  c.fillStyle = '#222';
+  c.textAlign = 'center';
+  c.fillText(String(num), mid, y - 2);
+}
+
+function drawRestCanvas(c, type, x, y, col) {
+  c.fillStyle   = col;
+  c.strokeStyle = col;
+  c.lineCap     = 'round';
+  c.lineJoin    = 'round';
+  c.save();
+  if (type === 'r') {
+    c.translate(x, y - 8);
+    c.lineWidth = 1.8;
+    c.beginPath(); c.moveTo(-4, 0); c.lineTo(3, -6); c.stroke();
+    c.beginPath(); c.moveTo(3, -6); c.lineTo(-3, 2); c.lineTo(4, 8); c.stroke();
+    c.beginPath(); c.arc(2, 10, 2.8, 0, Math.PI*2); c.fill();
+    c.beginPath(); c.moveTo(2, 10); c.bezierCurveTo(-5, 12, -4, 18, 1, 18); c.stroke();
+  } else if (type === 'h' || type === 'hr') {
+    c.fillRect(x-9, y-11, 18, 6);
+  } else if (type === 'w') {
+    c.fillRect(x-9, y-3, 18, 6);
+  } else if (type === 'er') {
+    c.translate(x, y);
+    c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(-2, 12); c.lineTo(3, -8); c.stroke();
+    c.beginPath(); c.arc(3, -10, 3, 0, Math.PI*2); c.fill();
+    c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(3,-10); c.bezierCurveTo(10,-6,10,0,3,4); c.stroke();
+  } else if (type === 'sr') {
+    c.translate(x, y);
+    c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(-2, 14); c.lineTo(3, -12); c.stroke();
+    c.beginPath(); c.arc(3, -14, 3, 0, Math.PI*2); c.fill();
+    c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(3,-14); c.bezierCurveTo(10,-10,10,-4,3,0); c.stroke();
+    c.beginPath(); c.arc(3, -2, 3, 0, Math.PI*2); c.fill();
+    c.beginPath(); c.moveTo(3,-2); c.bezierCurveTo(10,2,10,8,3,12); c.stroke();
+  }
+  c.restore();
+  c.lineCap = 'butt'; c.lineJoin = 'miter'; c.lineWidth = 1;
+}
+
 
 function makeNote(dur, isRest, VF, StaveNote, dotted) {
   const sn = new StaveNote({
@@ -1510,12 +1558,14 @@ function showTapLine(tapRelMs) {
 
 // SVGスケール比率を取得（VexFlow内部座標 → CSS表示座標）
 function getSvgScale() {
+  // Canvas描画ではスケール変換不要（CSS座標と一致）
+  if (window._canvasIsNative) return 1;
   const container = document.getElementById('atContainer');
   if (!container) return 1;
   const svg = container.querySelector('svg');
   if (!svg) return 1;
-  const svgW   = parseFloat(svg.getAttribute('width')  || svg.viewBox?.baseVal?.width  || 0);
-  const dispW  = svg.getBoundingClientRect().width;
+  const svgW  = parseFloat(svg.getAttribute('width') || '0');
+  const dispW = svg.getBoundingClientRect().width;
   return svgW > 0 && dispW > 0 ? dispW / svgW : 1;
 }
 
