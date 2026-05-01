@@ -809,80 +809,124 @@ const STEM_H = 46;
 const BEAM_THICK = 6;
 const BEAM_GAP = 8;
 
+// ═══════════════════════════════════════════════════════
+// SCORE DRAWING — proper engraving layout
+// ═══════════════════════════════════════════════════════
+//
+// Layout concept:
+//   [left edge] [clef+timesig area] [barline] [measure1 notes] [barline] [measure2 notes] [barline] [right edge]
+//
+// Within each measure, notes are placed with:
+//   - beat-proportional X (time = position)
+//   - a small inset from each barline (NOTE_PAD)
+//   - so "note position" = measureLeft + NOTE_PAD + (gridPosInMeasure / GRID_MEASURE) * noteAreaW
+//
+const CLEF_W   = 28;   // width for percussion clef symbol
+const TIMESIG_W = 32;  // width for 4/4 time signature
+const HEADER_W = CLEF_W + TIMESIG_W;  // total left header before first barline
+const NOTE_PAD = 14;   // px gap between barline and first/last note in measure
+const BAR_LINE_W = 2;
+
+// Convert a gridStart position to canvas X
+// scoreLeft = X of the header area start (left edge of staff line)
+// scoreW    = full width of staff line
 function noteXCalc(gridStart, scoreLeft, scoreW) {
-  // Each measure gets a small inset padding so notes don't sit on barlines
-  const PAD = 10; // px padding inside each measure from barline
-  const measureW = scoreW / MEASURES;
+  const notesAreaW = scoreW - HEADER_W;           // width after header
+  const measureW   = notesAreaW / MEASURES;       // width per measure
   const measureIdx = Math.floor(gridStart / GRID_MEASURE);
   const posInMeasure = gridStart % GRID_MEASURE;
-  const innerW = measureW - PAD * 2;
-  const measureLeft = scoreLeft + measureIdx * measureW + PAD;
-  return measureLeft + (posInMeasure / GRID_MEASURE) * innerW;
+  const innerW     = measureW - NOTE_PAD * 2;     // usable note area inside barlines
+  const measureLeft = scoreLeft + HEADER_W + measureIdx * measureW;
+  return measureLeft + NOTE_PAD + (posInMeasure / GRID_MEASURE) * innerW;
+}
+
+// X position of barline m (0 = first barline after header, MEASURES = final barline)
+function barlineX(m, scoreLeft, scoreW) {
+  const notesAreaW = scoreW - HEADER_W;
+  const measureW   = notesAreaW / MEASURES;
+  return scoreLeft + HEADER_W + m * measureW;
 }
 
 function drawScore(cursorRatio) {
-  const w = canvas.offsetWidth || window.innerWidth;
-  const h = CANVAS_H;
+  const w   = canvas.offsetWidth || window.innerWidth;
+  const h   = CANVAS_H;
   ctx.clearRect(0, 0, w, h);
 
-  // Parchment-white background for clear notation
+  // ── Background ──
   ctx.fillStyle = '#f8f5ef';
   ctx.fillRect(0, 0, w, h);
 
-  // Layout
-  const marginL = 54;
-  const marginR = 12;
-  const staffY = Math.round(h * STAFF_Y_RATIO);
-  const sL = marginL;
-  const sW = w - marginL - marginR;
-  const nX = (gs) => noteXCalc(gs, sL, sW);
+  const PAD_L  = 8;   // left edge padding
+  const PAD_R  = 10;  // right edge padding
+  const scoreLeft = PAD_L;
+  const scoreW    = w - PAD_L - PAD_R;
+  const staffY    = Math.round(h * STAFF_Y_RATIO);
 
-  // ── Percussion clef (two bold vertical bars) ──
-  ctx.fillStyle = '#111';
-  ctx.fillRect(6,  staffY - 16, 5, 32);
-  ctx.fillRect(15, staffY - 16, 5, 32);
-
-  // ── Time signature 4/4 ──
-  ctx.fillStyle = '#111';
-  ctx.font = 'bold 24px Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('4', 40, staffY - 1);
-  ctx.fillText('4', 40, staffY + 21);
-
-  // ── Staff line ──
+  // ── Staff line (full width) ──
   ctx.strokeStyle = '#111';
-  ctx.lineWidth = 1.6;
+  ctx.lineWidth = 1.8;
   ctx.beginPath();
-  ctx.moveTo(sL, staffY);
-  ctx.lineTo(sL + sW, staffY);
+  ctx.moveTo(scoreLeft, staffY);
+  ctx.lineTo(scoreLeft + scoreW, staffY);
   ctx.stroke();
 
-  // ── Bar lines ──
+  // ── Percussion clef: two thick vertical bars ──
+  const clefX = scoreLeft + 6;
+  ctx.fillStyle = '#111';
+  ctx.fillRect(clefX,      staffY - 18, 5, 36);
+  ctx.fillRect(clefX + 10, staffY - 18, 5, 36);
+
+  // ── Time signature 4/4 ──
+  const tsX = scoreLeft + CLEF_W + 4;
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 26px Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('4', tsX + TIMESIG_W / 2, staffY - 1);
+  ctx.fillText('4', tsX + TIMESIG_W / 2, staffY + 22);
+
+  // ── Barlines ──
   for (let m = 0; m <= MEASURES; m++) {
-    const x = sL + (m / MEASURES) * sW;
+    const bx = barlineX(m, scoreLeft, scoreW);
     ctx.strokeStyle = '#111';
-    ctx.lineWidth = m === 0 || m === MEASURES ? 2.5 : 1.6;
-    ctx.beginPath();
-    ctx.moveTo(x, staffY - 20);
-    ctx.lineTo(x, staffY + 20);
-    ctx.stroke();
+    // Double barline at end
+    if (m === MEASURES) {
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(bx - 4, staffY - 22);
+      ctx.lineTo(bx - 4, staffY + 22);
+      ctx.stroke();
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(bx, staffY - 22);
+      ctx.lineTo(bx, staffY + 22);
+      ctx.stroke();
+    } else {
+      ctx.lineWidth = m === 0 ? 1.8 : 1.8;
+      ctx.beginPath();
+      ctx.moveTo(bx, staffY - 22);
+      ctx.lineTo(bx, staffY + 22);
+      ctx.stroke();
+    }
   }
 
-  // ── Faint beat guides ──
+  // ── Faint beat subdivision guides ──
   for (let b = 1; b < TOTAL_BEATS; b++) {
-    if (b % BEATS_PER_MEASURE === 0) continue;
-    const x = sL + (b / TOTAL_BEATS) * sW;
-    ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+    if (b % BEATS_PER_MEASURE === 0) continue; // skip barlines
+    const beatGrid = b * GRID_BEAT;
+    const bx = noteXCalc(beatGrid, scoreLeft, scoreW);
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x, staffY - 16);
-    ctx.lineTo(x, staffY + 16);
+    ctx.moveTo(bx, staffY - 16);
+    ctx.lineTo(bx, staffY + 16);
     ctx.stroke();
   }
 
   if (!patternNotes.length) return;
 
-  // ── Build beam groups per beat (non-rest, non-tuplet, 8th or shorter) ──
+  const nX = (gs) => noteXCalc(gs, scoreLeft, scoreW);
+
+  // ── Build beam groups: per beat, non-rest non-tuplet, 8th or shorter ──
   const beamMap = {};
   for (const note of patternNotes) {
     if (note.isRest || note.tuplet) continue;
@@ -892,29 +936,30 @@ function drawScore(cursorRatio) {
     beamMap[b].push(note);
   }
 
-  // ── Draw beams (stem-UP: beam at top of stems) ──
+  // ── Draw beams first (behind noteheads) ──
   for (const grp of Object.values(beamMap)) {
     if (grp.length < 2) continue;
-    const stemTop = staffY - STEM_H;
+    const beamY = staffY - STEM_H;
     const x1 = nX(grp[0].gridStart) + NOTE_R_W;
     const x2 = nX(grp[grp.length - 1].gridStart) + NOTE_R_W;
+    // Primary beam
     ctx.fillStyle = '#111';
-    ctx.fillRect(x1, stemTop - BEAM_THICK, x2 - x1, BEAM_THICK);
+    ctx.fillRect(x1, beamY - BEAM_THICK, x2 - x1, BEAM_THICK);
     // Secondary 16th beam
     const s16 = grp.filter(n => n.gridDur <= DUR.sixteenth + 5);
     if (s16.length >= 2) {
       const sx1 = nX(s16[0].gridStart) + NOTE_R_W;
       const sx2 = nX(s16[s16.length - 1].gridStart) + NOTE_R_W;
-      ctx.fillRect(sx1, stemTop - BEAM_THICK - BEAM_GAP, sx2 - sx1, BEAM_THICK);
+      ctx.fillRect(sx1, beamY - BEAM_THICK - BEAM_GAP, sx2 - sx1, BEAM_THICK);
     }
   }
 
-  // ── Draw each note/rest ──
+  // ── Draw notes/rests ──
   for (let i = 0; i < patternNotes.length; i++) {
     const note = patternNotes[i];
-    const x = nX(note.gridStart);
-    const jud = judgments[i];
-    let color = '#111';
+    const x    = nX(note.gridStart);
+    const jud  = judgments[i];
+    let color  = '#111';
     if (jud) {
       if (jud.type === 'perfect') color = '#007a30';
       else if (jud.type === 'good') color = '#9a6800';
@@ -934,22 +979,21 @@ function drawScore(cursorRatio) {
 
   // ── Tap marks ──
   for (const tm of tapMarks) {
-    const x = noteXCalc(tm.gridPos, sL, sW);
+    const x = noteXCalc(tm.gridPos, scoreLeft, scoreW);
     ctx.strokeStyle = 'rgba(200,20,50,0.5)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
-    ctx.moveTo(x, staffY - 24);
-    ctx.lineTo(x, staffY + 24);
+    ctx.moveTo(x, staffY - 26);
+    ctx.lineTo(x, staffY + 26);
     ctx.stroke();
     ctx.setLineDash([]);
   }
 
   // ── Cursor ──
-  if (cursorRatio !== undefined && cursorRatio >= 0 && cursorRatio <= 1) {
-    // Map ratio to grid position, then use noteXCalc for consistent spacing
-    const cursorGrid = cursorRatio * GRID_TOTAL;
-    const cx = noteXCalc(Math.min(cursorGrid, GRID_TOTAL - 1), sL, sW);
+  if (cursorRatio !== undefined && cursorRatio >= 0 && cursorRatio <= 1.001) {
+    const cursorGrid = Math.min(cursorRatio * GRID_TOTAL, GRID_TOTAL - 1);
+    const cx = noteXCalc(cursorGrid, scoreLeft, scoreW);
     ctx.strokeStyle = '#e8002a';
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.85;
