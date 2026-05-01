@@ -597,7 +597,7 @@ const GRID = 1260; // LCM(4,3,5,6,7,9,... for tuplets)
 const BEATS_PER_MEASURE = 4;
 const MEASURES = 2;
 const TOTAL_BEATS = BEATS_PER_MEASURE * MEASURES;
-const CANVAS_H = 130;
+const CANVAS_H = 175;
 
 let ac = null;
 let bpm = 80;
@@ -801,306 +801,319 @@ function setupCanvas() {
   return w;
 }
 
+// ── Layout constants for notation (stem-UP style) ──
+const STAFF_Y_RATIO = 0.62;  // staff line lower, stems go up
+const NOTE_R_W = 7;
+const NOTE_R_H = 5.2;
+const STEM_H = 40;
+const BEAM_THICK = 5;
+const BEAM_GAP = 7;
+
+function noteXCalc(gridStart, scoreLeft, scoreW) {
+  return scoreLeft + (gridStart / GRID_TOTAL) * scoreW;
+}
+
 function drawScore(cursorRatio) {
   const w = canvas.offsetWidth || window.innerWidth;
   const h = CANVAS_H;
   ctx.clearRect(0, 0, w, h);
 
-  // Background
-  ctx.fillStyle = '#0d0d16';
+  // Parchment-white background for clear notation
+  ctx.fillStyle = '#f8f5ef';
   ctx.fillRect(0, 0, w, h);
 
-  const marginL = 28;
+  // Layout
+  const marginL = 54;
   const marginR = 12;
-  const staffW = w - marginL - marginR;
-  const staffY = 62; // y of the single staff line
-  const noteR = 7; // note head radius
-  const stemH = 36;
+  const staffY = Math.round(h * STAFF_Y_RATIO);
+  const sL = marginL;
+  const sW = w - marginL - marginR;
+  const nX = (gs) => noteXCalc(gs, sL, sW);
 
-  // Clef (percussion bracket)
-  ctx.strokeStyle = '#556';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(marginL - 10, staffY - 12);
-  ctx.lineTo(marginL - 10, staffY + 12);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(marginL - 10, staffY - 12);
-  ctx.lineTo(marginL - 4, staffY - 12);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(marginL - 10, staffY + 12);
-  ctx.lineTo(marginL - 4, staffY + 12);
-  ctx.stroke();
+  // ── Percussion clef (two bold vertical bars) ──
+  ctx.fillStyle = '#111';
+  ctx.fillRect(6,  staffY - 16, 5, 32);
+  ctx.fillRect(15, staffY - 16, 5, 32);
 
-  // Time signature
-  ctx.fillStyle = '#8888aa';
-  ctx.font = 'bold 20px serif';
+  // ── Time signature 4/4 ──
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 24px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText('4', marginL + 6, staffY - 2);
-  ctx.fillText('4', marginL + 6, staffY + 14);
+  ctx.fillText('4', 40, staffY - 1);
+  ctx.fillText('4', 40, staffY + 21);
 
-  const scoreLeft = marginL + 18;
-  const scoreW = staffW - 18;
-
-  // Staff line(s)
-  ctx.strokeStyle = '#3a3a5a';
-  ctx.lineWidth = 1.2;
+  // ── Staff line ──
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth = 1.6;
   ctx.beginPath();
-  ctx.moveTo(scoreLeft, staffY);
-  ctx.lineTo(scoreLeft + scoreW, staffY);
+  ctx.moveTo(sL, staffY);
+  ctx.lineTo(sL + sW, staffY);
   ctx.stroke();
 
-  // Bar lines & measure markers
+  // ── Bar lines ──
   for (let m = 0; m <= MEASURES; m++) {
-    const x = scoreLeft + (m / MEASURES) * scoreW;
-    ctx.strokeStyle = m === 0 || m === MEASURES ? '#7777aa' : '#444466';
-    ctx.lineWidth = m === 0 || m === MEASURES ? 1.8 : 1;
+    const x = sL + (m / MEASURES) * sW;
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = m === 0 || m === MEASURES ? 2.5 : 1.6;
     ctx.beginPath();
-    ctx.moveTo(x, staffY - 14);
-    ctx.lineTo(x, staffY + 14);
+    ctx.moveTo(x, staffY - 20);
+    ctx.lineTo(x, staffY + 20);
     ctx.stroke();
   }
 
-  // Beat subdivisions (faint)
+  // ── Faint beat guides ──
   for (let b = 1; b < TOTAL_BEATS; b++) {
-    if (b % 4 === 0) continue; // skip bar lines
-    const x = scoreLeft + (b / TOTAL_BEATS) * scoreW;
-    ctx.strokeStyle = '#222233';
-    ctx.lineWidth = 0.8;
+    if (b % BEATS_PER_MEASURE === 0) continue;
+    const x = sL + (b / TOTAL_BEATS) * sW;
+    ctx.strokeStyle = 'rgba(0,0,0,0.07)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(x, staffY - 10);
-    ctx.lineTo(x, staffY + 10);
+    ctx.moveTo(x, staffY - 16);
+    ctx.lineTo(x, staffY + 16);
     ctx.stroke();
   }
 
-  // ── Draw notes ──
-  // First pass: group beamed notes (eighth/sixteenth within same beat)
-  const beamGroups = []; // [{notes: [...], beat}]
-  let beatNotes = {};
+  if (!patternNotes.length) return;
+
+  // ── Build beam groups per beat (non-rest, non-tuplet, 8th or shorter) ──
+  const beamMap = {};
   for (const note of patternNotes) {
     if (note.isRest || note.tuplet) continue;
-    const beatNum = Math.floor(note.gridStart / GRID_BEAT);
-    if (note.gridDur <= DUR.eighth) {
-      if (!beatNotes[beatNum]) beatNotes[beatNum] = [];
-      beatNotes[beatNum].push(note);
-    }
+    if (note.gridDur > DUR.eighth + 5) continue;
+    const b = Math.floor(note.gridStart / GRID_BEAT);
+    if (!beamMap[b]) beamMap[b] = [];
+    beamMap[b].push(note);
   }
 
-  function noteX(gridStart) {
-    return scoreLeft + (gridStart / GRID_TOTAL) * scoreW;
-  }
-
-  // Draw beam groups first
-  for (const [beat, grp] of Object.entries(beatNotes)) {
+  // ── Draw beams (stem-UP: beam at top of stems) ──
+  for (const grp of Object.values(beamMap)) {
     if (grp.length < 2) continue;
-    // Draw beam
-    const x1 = noteX(grp[0].gridStart);
-    const x2 = noteX(grp[grp.length - 1].gridStart);
-    const beamY = staffY - stemH - 2;
-    ctx.strokeStyle = '#aaaacc';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(x1, beamY);
-    ctx.lineTo(x2, beamY);
-    ctx.stroke();
-
-    // 16th beam
-    const sixteenths = grp.filter(n => n.gridDur <= DUR.sixteenth + 5);
-    if (sixteenths.length >= 2) {
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#aaaacc';
-      // group consecutive 16ths
-      let i = 0;
-      while (i < sixteenths.length) {
-        let j = i;
-        while (j + 1 < sixteenths.length) j++;
-        if (j > i) {
-          ctx.beginPath();
-          ctx.moveTo(noteX(sixteenths[i].gridStart), beamY + 5);
-          ctx.lineTo(noteX(sixteenths[j].gridStart), beamY + 5);
-          ctx.stroke();
-        }
-        i = j + 1;
-      }
+    const stemTop = staffY - STEM_H;
+    const x1 = nX(grp[0].gridStart) + NOTE_R_W;
+    const x2 = nX(grp[grp.length - 1].gridStart) + NOTE_R_W;
+    ctx.fillStyle = '#111';
+    ctx.fillRect(x1, stemTop - BEAM_THICK, x2 - x1, BEAM_THICK);
+    // Secondary 16th beam
+    const s16 = grp.filter(n => n.gridDur <= DUR.sixteenth + 5);
+    if (s16.length >= 2) {
+      const sx1 = nX(s16[0].gridStart) + NOTE_R_W;
+      const sx2 = nX(s16[s16.length - 1].gridStart) + NOTE_R_W;
+      ctx.fillRect(sx1, stemTop - BEAM_THICK - BEAM_GAP, sx2 - sx1, BEAM_THICK);
     }
   }
 
-  // Draw each note
-  for (const note of patternNotes) {
-    const x = noteX(note.gridStart);
-    const jIdx = patternNotes.indexOf(note);
-    const jud = judgments[jIdx];
-    let color = '#aaaacc';
+  // ── Draw each note/rest ──
+  for (let i = 0; i < patternNotes.length; i++) {
+    const note = patternNotes[i];
+    const x = nX(note.gridStart);
+    const jud = judgments[i];
+    let color = '#111';
     if (jud) {
-      if (jud.type === 'perfect') color = '#00e676';
-      else if (jud.type === 'good') color = '#ffd600';
-      else color = '#ff3b5c';
+      if (jud.type === 'perfect') color = '#007a30';
+      else if (jud.type === 'good') color = '#9a6800';
+      else color = '#bb0015';
     }
-
     if (note.isRest) {
       drawRest(x, staffY, note.gridDur, color);
     } else {
-      drawNote(x, staffY, note.gridDur, color, beatNotes, note);
+      const b = Math.floor(note.gridStart / GRID_BEAT);
+      const inBeam = beamMap[b] && beamMap[b].length >= 2;
+      drawNoteHead(x, staffY, note, color, inBeam);
     }
-
-    // Tuplet bracket
-    if (note.tuplet && note.tupletIdx === 0) {
-      drawTuplet(note, patternNotes, noteX, staffY, stemH);
+    if (note.tuplet !== null && note.tupletIdx === 0) {
+      drawTuplet(note, patternNotes, nX, staffY);
     }
   }
 
-  // Tap marks
+  // ── Tap marks ──
   for (const tm of tapMarks) {
-    const x = scoreLeft + tm.xRatio * scoreW;
-    ctx.strokeStyle = 'rgba(255,59,92,0.6)';
-    ctx.lineWidth = 1.2;
+    const x = sL + tm.xRatio * sW;
+    ctx.strokeStyle = 'rgba(200,20,50,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
     ctx.beginPath();
-    ctx.moveTo(x, staffY - 18);
-    ctx.lineTo(x, staffY + 18);
+    ctx.moveTo(x, staffY - 24);
+    ctx.lineTo(x, staffY + 24);
     ctx.stroke();
+    ctx.setLineDash([]);
   }
 
-  // Cursor
+  // ── Cursor ──
   if (cursorRatio !== undefined && cursorRatio >= 0 && cursorRatio <= 1) {
-    const cx = scoreLeft + cursorRatio * scoreW;
-    ctx.strokeStyle = '#ff3b5c';
-    ctx.lineWidth = 2;
-    ctx.shadowColor = '#ff3b5c';
-    ctx.shadowBlur = 8;
+    const cx = sL + cursorRatio * sW;
+    ctx.strokeStyle = '#e8002a';
+    ctx.lineWidth = 2.2;
+    ctx.globalAlpha = 0.82;
     ctx.beginPath();
-    ctx.moveTo(cx, staffY - 22);
-    ctx.lineTo(cx, staffY + 22);
+    ctx.moveTo(cx, staffY - 28);
+    ctx.lineTo(cx, staffY + 28);
     ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
   }
 }
 
-function drawNote(x, staffY, gridDur, color, beatNotes, note) {
-  const noteR = 7;
-  const stemH = 36;
-  const beatNum = Math.floor(note.gridStart / GRID_BEAT);
-  const inGroup = beatNotes[beatNum] && beatNotes[beatNum].length >= 2;
+function drawNoteHead(x, staffY, note, color, inBeamGroup) {
+  const dur = note.gridDur;
+  const isOpen = dur >= DUR.half;
+  const stemTop = staffY - STEM_H;
+  const stemX = x + NOTE_R_W;  // right side of head, stem goes up
 
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
 
-  // Note head (X shape for percussion)
-  ctx.lineWidth = 2.5;
+  // Note head: slightly tilted ellipse
   ctx.beginPath();
-  ctx.moveTo(x - 5, staffY - 5); ctx.lineTo(x + 5, staffY + 5);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x + 5, staffY - 5); ctx.lineTo(x - 5, staffY + 5);
-  ctx.stroke();
-
-  // Stem (up)
-  const stemTop = staffY - stemH;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(x + 5, staffY - 2);
-  ctx.lineTo(x + 5, stemTop);
-  ctx.stroke();
-
-  // Flag (only if not in beam group and short note)
-  if (!inGroup) {
-    if (gridDur <= DUR.sixteenth + 5) {
-      // two flags
-      drawFlag(x + 5, stemTop, color);
-      drawFlag(x + 5, stemTop + 8, color);
-    } else if (gridDur <= DUR.eighth + 5) {
-      drawFlag(x + 5, stemTop, color);
-    }
-  }
-
-  // Dot for dotted notes
-  if (gridDur === DUR.dottedQuarter || gridDur === DUR.dottedEighth || gridDur === DUR.dottedHalf) {
-    ctx.beginPath();
-    ctx.arc(x + 12, staffY - 2, 2.5, 0, Math.PI * 2);
+  ctx.ellipse(x, staffY, NOTE_R_W, NOTE_R_H, -0.25, 0, Math.PI * 2);
+  if (isOpen) {
+    ctx.stroke();
+  } else {
     ctx.fill();
   }
 
-  // Whole/half note: open head
-  if (gridDur >= DUR.half) {
-    ctx.clearRect(x - 4, staffY - 4, 8, 8);
-    ctx.lineWidth = 2.5;
-    // Re-draw X open
+  // Whole note: no stem
+  if (dur >= DUR.whole - 5) {
+    if (dur > DUR.whole + 5) drawDot(x + NOTE_R_W + 5, staffY - 2, color);
+    return;
+  }
+
+  // Stem (upward from right side of head)
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(stemX, staffY - NOTE_R_H + 1);
+  ctx.lineTo(stemX, stemTop);
+  ctx.stroke();
+
+  // Flags (only when not beamed)
+  if (!inBeamGroup) {
+    if (dur <= DUR.sixteenth + 5) {
+      drawFlagUp(stemX, stemTop, color, 2);
+    } else if (dur <= DUR.eighth + 5) {
+      drawFlagUp(stemX, stemTop, color, 1);
+    }
+  }
+
+  // Augmentation dot
+  if (dur === DUR.dottedHalf || dur === DUR.dottedQuarter || dur === DUR.dottedEighth) {
+    drawDot(x + NOTE_R_W + 5, staffY - 2, color);
+  }
+}
+
+function drawFlagUp(sx, stemTop, color, count) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  for (let f = 0; f < count; f++) {
+    const fy = stemTop + f * 8;
     ctx.beginPath();
-    ctx.moveTo(x - 5, staffY - 5); ctx.lineTo(x + 5, staffY + 5);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x + 5, staffY - 5); ctx.lineTo(x - 5, staffY + 5);
+    ctx.moveTo(sx, fy);
+    ctx.bezierCurveTo(sx + 13, fy + 5, sx + 14, fy + 13, sx + 1, fy + 18);
     ctx.stroke();
   }
 }
 
-function drawFlag(sx, sy, color) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.8;
+function drawDot(x, y, color) {
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(sx, sy);
-  ctx.bezierCurveTo(sx + 14, sy + 6, sx + 14, sy + 14, sx, sy + 18);
-  ctx.stroke();
+  ctx.arc(x, y, 2.8, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function drawRest(x, staffY, gridDur, color) {
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  if (gridDur >= DUR.quarter - 5) {
-    // Quarter rest: zigzag
+
+  if (gridDur >= DUR.whole - 5) {
+    // Whole rest: thick rectangle hanging below imaginary upper line
+    ctx.fillRect(x - 10, staffY - 10, 20, 8);
+  } else if (gridDur >= DUR.half - 5) {
+    // Half rest: thick rectangle sitting on staff line
+    ctx.fillRect(x - 10, staffY + 2, 20, 8);
+  } else if (gridDur >= DUR.quarter - 5) {
+    // Quarter rest: standard squiggle
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.beginPath();
-    ctx.moveTo(x - 3, staffY - 10);
-    ctx.lineTo(x + 4, staffY - 4);
-    ctx.lineTo(x - 3, staffY + 0);
-    ctx.lineTo(x + 2, staffY + 5);
-    ctx.lineTo(x - 3, staffY + 10);
+    ctx.moveTo(x + 3, staffY - 14);
+    ctx.bezierCurveTo(x + 9, staffY - 10, x + 5, staffY - 5, x - 1, staffY - 3);
+    ctx.lineTo(x - 5, staffY + 2);
+    ctx.bezierCurveTo(x - 2, staffY + 5, x + 5, staffY + 6, x + 2, staffY + 13);
     ctx.stroke();
+    ctx.lineCap = 'butt';
   } else if (gridDur >= DUR.eighth - 5) {
     // Eighth rest
-    ctx.beginPath();
-    ctx.arc(x, staffY + 4, 3, 0, Math.PI * 2);
-    ctx.fill();
     ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(x + 3, staffY + 4);
-    ctx.lineTo(x - 4, staffY - 8);
+    ctx.moveTo(x - 1, staffY - 9);
+    ctx.lineTo(x + 4, staffY + 7);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + 4, staffY + 7, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineCap = 'butt';
   } else {
-    // Sixteenth rest
-    ctx.beginPath();
-    ctx.arc(x, staffY + 4, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, staffY - 2, 3, 0, Math.PI * 2);
-    ctx.fill();
+    // Sixteenth rest: two-dot diagonal
     ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(x + 3, staffY + 4);
-    ctx.lineTo(x - 2, staffY - 10);
+    ctx.moveTo(x, staffY - 11);
+    ctx.lineTo(x + 5, staffY + 9);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + 5, staffY + 9, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 2, staffY + 1, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineCap = 'butt';
   }
 }
 
-function drawTuplet(firstNote, allNotes, noteX, staffY, stemH) {
+function drawTuplet(firstNote, allNotes, nX, staffY) {
   const count = firstNote.tuplet;
-  const groupNotes = allNotes.filter(n => n.tuplet === count && n.gridStart >= firstNote.gridStart && n.gridStart < firstNote.gridStart + GRID_BEAT);
-  if (groupNotes.length < 2) return;
-  const x1 = noteX(groupNotes[0].gridStart);
-  const x2 = noteX(groupNotes[groupNotes.length - 1].gridStart);
-  const y = staffY - stemH - 14;
-  ctx.strokeStyle = '#8888aa';
-  ctx.lineWidth = 1.2;
+  const beatStart = firstNote.gridStart;
+  const beatEnd = beatStart + GRID_BEAT;
+  const grp = allNotes.filter(n => n.tuplet === count && n.gridStart >= beatStart && n.gridStart < beatEnd);
+  if (grp.length < 2) return;
+
+  const x1 = nX(grp[0].gridStart) - NOTE_R_W - 2;
+  const x2 = nX(grp[grp.length - 1].gridStart) + NOTE_R_W + 2;
+  // Bracket sits just above the noteheads (staff line level - small offset)
+  const bracketY = staffY - STEM_H - 14;  // above the beam
+  const tickH = 5;
+
+  ctx.strokeStyle = '#333';
+  ctx.fillStyle = '#111';
+  ctx.lineWidth = 1.4;
+
   ctx.beginPath();
-  ctx.moveTo(x1 - 4, y + 5);
-  ctx.lineTo(x1 - 4, y);
-  ctx.lineTo(x2 + 4, y);
-  ctx.lineTo(x2 + 4, y + 5);
+  ctx.moveTo(x1, bracketY + tickH);
+  ctx.lineTo(x1, bracketY);
   ctx.stroke();
-  ctx.fillStyle = '#aaaacc';
-  ctx.font = '11px monospace';
+
+  ctx.beginPath();
+  ctx.moveTo(x2, bracketY + tickH);
+  ctx.lineTo(x2, bracketY);
+  ctx.stroke();
+
+  ctx.font = 'bold 12px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.fillText(count, (x1 + x2) / 2, y - 2);
+  const numW = ctx.measureText(count).width + 6;
+  const mid = (x1 + x2) / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(x1, bracketY);
+  ctx.lineTo(mid - numW / 2, bracketY);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(mid + numW / 2, bracketY);
+  ctx.lineTo(x2, bracketY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#111';
+  ctx.fillText(count, mid, bracketY - 1);
 }
 
 // ═══════════════════════════════════════════════════════
