@@ -509,6 +509,7 @@
   #judgePop.perfect { color: var(--perfect); }
   #judgePop.good { color: var(--good); }
   #judgePop.miss { color: var(--miss); }
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vexflow/4.2.2/vexflow.min.js"></script>
 </style>
 </head>
 <body>
@@ -540,7 +541,10 @@
     </div>
     <button class="bpm-btn" onclick="changeBPM(+5)">+</button>
   </div>
-  <canvas id="scoreCanvas"></canvas>
+  <div id="scoreWrap" style="position:relative;width:100%;max-width:600px;background:#f8f5ef;border-top:1px solid #2a2a3a;border-bottom:1px solid #2a2a3a;overflow:hidden;">
+    <div id="scoreDiv"></div>
+    <canvas id="cursorCanvas" style="position:absolute;top:0;left:0;width:100%;pointer-events:none;"></canvas>
+  </div>
   <div class="phase-display" id="phaseDisplay">– READY –</div>
   <div class="beat-dots" id="beatDots">
     <div class="beat-dot"></div>
@@ -785,389 +789,309 @@ function generatePattern(level, seed) {
   return notes;
 }
 
-// ═══════════════════════════════════════════════════════
-// CANVAS DRAWING
-// ═══════════════════════════════════════════════════════
-const canvas = document.getElementById('scoreCanvas');
-const ctx = canvas.getContext('2d');
-
-function setupCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.offsetWidth || window.innerWidth;
-  canvas.width = w * dpr;
-  canvas.height = CANVAS_H * dpr;
-  canvas.style.height = CANVAS_H + 'px';
-  ctx.scale(dpr, dpr);
-  return w;
-}
-
-// ── Layout constants for notation (stem-UP style) ──
-const STAFF_Y_RATIO = 0.68;  // staff line lower, stems go up with room above
-const NOTE_R_W = 8;
-const NOTE_R_H = 6;
-const STEM_H = 46;
-const BEAM_THICK = 6;
-const BEAM_GAP = 8;
 
 // ═══════════════════════════════════════════════════════
-// SCORE DRAWING — proper engraving layout
+// VEXFLOW SCORE DRAWING
 // ═══════════════════════════════════════════════════════
 //
-// Layout concept:
-//   [left edge] [clef+timesig area] [barline] [measure1 notes] [barline] [measure2 notes] [barline] [right edge]
+// Architecture:
+//   - VexFlow renders the score as SVG into #scoreDiv
+//   - After render, we read each note's X position from the SVG
+//   - A separate <canvas id="cursorCanvas"> is overlaid for the moving cursor & tap marks
+//   - noteXPositions[] stores the pixel X of each note center (for cursor mapping)
 //
-// Within each measure, notes are placed with:
-//   - beat-proportional X (time = position)
-//   - a small inset from each barline (NOTE_PAD)
-//   - so "note position" = measureLeft + NOTE_PAD + (gridPosInMeasure / GRID_MEASURE) * noteAreaW
-//
-const CLEF_W   = 28;   // width for percussion clef symbol
-const TIMESIG_W = 32;  // width for 4/4 time signature
-const HEADER_W = CLEF_W + TIMESIG_W;  // total left header before first barline
-const NOTE_PAD = 14;   // px gap between barline and first/last note in measure
-const BAR_LINE_W = 2;
+const scoreDiv = document.getElementById('scoreDiv');
+const cursorCanvas = document.getElementById('cursorCanvas');
+const cctx = cursorCanvas.getContext('2d');
 
-// Convert a gridStart position to canvas X
-// scoreLeft = X of the header area start (left edge of staff line)
-// scoreW    = full width of staff line
-function noteXCalc(gridStart, scoreLeft, scoreW) {
-  const notesAreaW = scoreW - HEADER_W;           // width after header
-  const measureW   = notesAreaW / MEASURES;       // width per measure
-  const measureIdx = Math.floor(gridStart / GRID_MEASURE);
-  const posInMeasure = gridStart % GRID_MEASURE;
-  const innerW     = measureW - NOTE_PAD * 2;     // usable note area inside barlines
-  const measureLeft = scoreLeft + HEADER_W + measureIdx * measureW;
-  return measureLeft + NOTE_PAD + (posInMeasure / GRID_MEASURE) * innerW;
-}
+let noteXPositions = [];  // pixel X center of each non-rest note (for cursor)
+let vfScoreHeight = 0;    // actual rendered SVG height
+let vfScoreWidth  = 0;
 
-// X position of barline m (0 = first barline after header, MEASURES = final barline)
-function barlineX(m, scoreLeft, scoreW) {
-  const notesAreaW = scoreW - HEADER_W;
-  const measureW   = notesAreaW / MEASURES;
-  return scoreLeft + HEADER_W + m * measureW;
+// Map VexFlow duration key from gridDur
+function gridDurToVF(gridDur, tuplet) {
+  if (tuplet) {
+    // Tuplet notes: all treated as 8th (VF handles actual spacing via tuplet)
+    return '8';
+  }
+  if (gridDur >= DUR.whole - 5)         return 'w';
+  if (gridDur >= DUR.dottedHalf - 5)    return 'hd';
+  if (gridDur >= DUR.half - 5)          return 'h';
+  if (gridDur >= DUR.dottedQuarter - 5) return 'qd';
+  if (gridDur >= DUR.quarter - 5)       return 'q';
+  if (gridDur >= DUR.dottedEighth - 5)  return '8d';
+  if (gridDur >= DUR.eighth - 5)        return '8';
+  return '16';
 }
 
 function drawScore(cursorRatio) {
-  const w   = canvas.offsetWidth || window.innerWidth;
-  const h   = CANVAS_H;
-  ctx.clearRect(0, 0, w, h);
+  // 1. Render VexFlow score (only if notes exist and ratio is undefined = initial draw)
+  if (cursorRatio === undefined || cursorRatio === null) {
+    renderVexFlow();
+  }
+  // 2. Draw cursor overlay
+  drawCursorOverlay(cursorRatio);
+}
 
-  // ── Background ──
-  ctx.fillStyle = '#f8f5ef';
-  ctx.fillRect(0, 0, w, h);
+function renderVexFlow() {
+  if (!patternNotes.length) { scoreDiv.innerHTML = ''; return; }
 
-  const PAD_L  = 8;   // left edge padding
-  const PAD_R  = 10;  // right edge padding
-  const scoreLeft = PAD_L;
-  const scoreW    = w - PAD_L - PAD_R;
-  const staffY    = Math.round(h * STAFF_Y_RATIO);
+  const VF = Vex.Flow;
+  const wrap = document.getElementById('scoreWrap');
+  const W = wrap.offsetWidth || window.innerWidth;
+  const H = 160;
 
-  // ── Staff line (full width) ──
-  ctx.strokeStyle = '#111';
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.moveTo(scoreLeft, staffY);
-  ctx.lineTo(scoreLeft + scoreW, staffY);
-  ctx.stroke();
+  scoreDiv.innerHTML = '';
+  scoreDiv.style.width = W + 'px';
 
-  // ── Percussion clef: two thick vertical bars ──
-  const clefX = scoreLeft + 6;
-  ctx.fillStyle = '#111';
-  ctx.fillRect(clefX,      staffY - 18, 5, 36);
-  ctx.fillRect(clefX + 10, staffY - 18, 5, 36);
+  const renderer = new VF.Renderer(scoreDiv, VF.Renderer.Backends.SVG);
+  renderer.resize(W, H);
+  const vfCtx = renderer.getContext();
+  vfCtx.setFont('Arial', 10);
 
-  // ── Time signature 4/4 ──
-  const tsX = scoreLeft + CLEF_W + 4;
-  ctx.fillStyle = '#111';
-  ctx.font = 'bold 26px Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('4', tsX + TIMESIG_W / 2, staffY - 1);
-  ctx.fillText('4', tsX + TIMESIG_W / 2, staffY + 22);
+  // ── Build VexFlow StaveNotes from patternNotes ──
+  // Split into 2 measures
+  const measure1Notes = patternNotes.filter(n => n.gridStart < GRID_MEASURE);
+  const measure2Notes = patternNotes.filter(n => n.gridStart >= GRID_MEASURE);
 
-  // ── Barlines ──
-  for (let m = 0; m <= MEASURES; m++) {
-    const bx = barlineX(m, scoreLeft, scoreW);
-    ctx.strokeStyle = '#111';
-    // Double barline at end
-    if (m === MEASURES) {
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(bx - 4, staffY - 22);
-      ctx.lineTo(bx - 4, staffY + 22);
-      ctx.stroke();
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(bx, staffY - 22);
-      ctx.lineTo(bx, staffY + 22);
-      ctx.stroke();
-    } else {
-      ctx.lineWidth = m === 0 ? 1.8 : 1.8;
-      ctx.beginPath();
-      ctx.moveTo(bx, staffY - 22);
-      ctx.lineTo(bx, staffY + 22);
-      ctx.stroke();
+  function buildVFNotes(notes) {
+    const vfNotes = [];
+    let i = 0;
+    while (i < notes.length) {
+      const note = notes[i];
+      const dur = gridDurToVF(note.gridDur, note.tuplet);
+      const isRest = note.isRest;
+
+      // Percussion note on middle line (B4 in treble = line 3, but for perc use 'b/4')
+      const staveNote = new VF.StaveNote({
+        keys: isRest ? ['b/4'] : ['b/4'],
+        duration: isRest ? dur + 'r' : dur,
+        stem_direction: isRest ? 1 : 1,  // stem up
+      });
+
+      // Set notehead style for percussion (x-notehead) — only for non-rest
+      if (!isRest) {
+        staveNote.setStyle({ fillStyle: '#111', strokeStyle: '#111' });
+      }
+
+      vfNotes.push({ staveNote, noteData: note });
+      i++;
+    }
+    return vfNotes;
+  }
+
+  const m1 = buildVFNotes(measure1Notes);
+  const m2 = buildVFNotes(measure2Notes);
+
+  // ── Create staves ──
+  const staveY = 30;
+  const stave1W = Math.floor((W - 20) * 0.5);
+  const stave2W = W - 20 - stave1W;
+
+  const stave1 = new VF.Stave(10, staveY, stave1W);
+  stave1.addClef('percussion').addTimeSignature('4/4');
+  stave1.setContext(vfCtx).draw();
+
+  const stave2 = new VF.Stave(10 + stave1W, staveY, stave2W);
+  // End barline as double
+  stave2.setEndBarType(VF.Barline.type.END);
+  stave2.setContext(vfCtx).draw();
+
+  // ── Build voices ──
+  function buildVoice(items, stave) {
+    if (!items.length) return null;
+    const voice = new VF.Voice({ num_beats: 4, beat_value: 4 });
+    voice.setStrict(false);
+    voice.addTickables(items.map(i => i.staveNote));
+
+    // Add beams (1 beat = 1 beam group for 8th/16th)
+    const beams = VF.Beam.generateBeams(items.map(i => i.staveNote), {
+      groups: [new VF.Fraction(1, 4)],  // beam per quarter note
+      stem_direction: 1,
+    });
+
+    // Add tuplets
+    const tupletGroups = {};
+    items.forEach(({ staveNote, noteData }) => {
+      if (noteData.tuplet && noteData.tupletIdx === 0) {
+        const key = noteData.gridStart;
+        tupletGroups[key] = [];
+      }
+    });
+    items.forEach(({ staveNote, noteData }) => {
+      if (noteData.tuplet) {
+        // Find the group key (gridStart of first note in tuplet)
+        const beatStart = Math.floor(noteData.gridStart / GRID_BEAT) * GRID_BEAT;
+        if (tupletGroups[beatStart] !== undefined) {
+          tupletGroups[beatStart].push(staveNote);
+        }
+      }
+    });
+
+    const tuplets = Object.entries(tupletGroups).map(([, notes]) => {
+      if (notes.length < 2) return null;
+      const count = notes.length;
+      // Standard tuplet: n notes in the time of the next lower power-of-2
+      const notesOccupied = count <= 3 ? 2 : count <= 6 ? 4 : count <= 7 ? 4 : 8;
+      return new VF.Tuplet(notes, { notes_occupied: notesOccupied, num_notes: count });
+    }).filter(Boolean);
+
+    return { voice, beams, tuplets };
+  }
+
+  const v1 = buildVoice(m1, stave1);
+  const v2 = buildVoice(m2, stave2);
+
+  // ── Format & draw ──
+  if (v1) {
+    new VF.Formatter()
+      .joinVoices([v1.voice])
+      .format([v1.voice], stave1W - 50);
+    v1.voice.draw(vfCtx, stave1);
+    v1.beams.forEach(b => b.setContext(vfCtx).draw());
+    v1.tuplets.forEach(t => t.setContext(vfCtx).draw());
+  }
+  if (v2) {
+    new VF.Formatter()
+      .joinVoices([v2.voice])
+      .format([v2.voice], stave2W - 20);
+    v2.voice.draw(vfCtx, stave2);
+    v2.beams.forEach(b => b.setContext(vfCtx).draw());
+    v2.tuplets.forEach(t => t.setContext(vfCtx).draw());
+  }
+
+  // ── Extract note X positions from rendered SVG noteheads ──
+  // VexFlow puts noteheads as <g class="vf-stavenote"> with a <g class="vf-notehead">
+  vfScoreHeight = H;
+  vfScoreWidth  = W;
+
+  // Setup cursor canvas
+  const dpr = window.devicePixelRatio || 1;
+  cursorCanvas.width  = W * dpr;
+  cursorCanvas.height = H * dpr;
+  cursorCanvas.style.height = H + 'px';
+  cctx.scale(dpr, dpr);
+
+  // Store note X positions by extracting from SVG after a short delay (render completes)
+  setTimeout(() => {
+    extractNotePositions(m1, m2, stave1, stave2);
+    // Apply judgment colors
+    applyJudgmentColors();
+  }, 20);
+}
+
+function extractNotePositions(m1, m2, stave1, stave2) {
+  // Use VexFlow's own note.getAbsoluteX() which is set after format()
+  noteXPositions = [];
+  const allItems = [...m1, ...m2];
+  for (const { staveNote, noteData } of allItems) {
+    if (!noteData.isRest) {
+      try {
+        const x = staveNote.getAbsoluteX();
+        noteXPositions.push({ x, gridStart: noteData.gridStart });
+      } catch(e) {}
     }
   }
+}
 
-  // ── Faint beat subdivision guides ──
-  for (let b = 1; b < TOTAL_BEATS; b++) {
-    if (b % BEATS_PER_MEASURE === 0) continue; // skip barlines
-    const beatGrid = b * GRID_BEAT;
-    const bx = noteXCalc(beatGrid, scoreLeft, scoreW);
-    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(bx, staffY - 16);
-    ctx.lineTo(bx, staffY + 16);
-    ctx.stroke();
-  }
-
-  if (!patternNotes.length) return;
-
-  const nX = (gs) => noteXCalc(gs, scoreLeft, scoreW);
-
-  // ── Build beam groups: per beat, non-rest non-tuplet, 8th or shorter ──
-  const beamMap = {};
-  for (const note of patternNotes) {
-    if (note.isRest || note.tuplet) continue;
-    if (note.gridDur > DUR.eighth + 5) continue;
-    const b = Math.floor(note.gridStart / GRID_BEAT);
-    if (!beamMap[b]) beamMap[b] = [];
-    beamMap[b].push(note);
-  }
-
-  // ── Draw beams first (behind noteheads) ──
-  for (const grp of Object.values(beamMap)) {
-    if (grp.length < 2) continue;
-    const beamY = staffY - STEM_H;
-    const x1 = nX(grp[0].gridStart) + NOTE_R_W;
-    const x2 = nX(grp[grp.length - 1].gridStart) + NOTE_R_W;
-    // Primary beam
-    ctx.fillStyle = '#111';
-    ctx.fillRect(x1, beamY - BEAM_THICK, x2 - x1, BEAM_THICK);
-    // Secondary 16th beam
-    const s16 = grp.filter(n => n.gridDur <= DUR.sixteenth + 5);
-    if (s16.length >= 2) {
-      const sx1 = nX(s16[0].gridStart) + NOTE_R_W;
-      const sx2 = nX(s16[s16.length - 1].gridStart) + NOTE_R_W;
-      ctx.fillRect(sx1, beamY - BEAM_THICK - BEAM_GAP, sx2 - sx1, BEAM_THICK);
-    }
-  }
-
-  // ── Draw notes/rests ──
+function applyJudgmentColors() {
+  // Color note SVG elements based on judgments
+  const allNoteEls = scoreDiv.querySelectorAll('.vf-stavenote');
+  let noteIdx = 0;
   for (let i = 0; i < patternNotes.length; i++) {
-    const note = patternNotes[i];
-    const x    = nX(note.gridStart);
-    const jud  = judgments[i];
-    let color  = '#111';
-    if (jud) {
-      if (jud.type === 'perfect') color = '#007a30';
-      else if (jud.type === 'good') color = '#9a6800';
-      else color = '#bb0015';
-    }
-    if (note.isRest) {
-      drawRest(x, staffY, note.gridDur, color);
-    } else {
-      const b = Math.floor(note.gridStart / GRID_BEAT);
-      const inBeam = beamMap[b] && beamMap[b].length >= 2;
-      drawNoteHead(x, staffY, note, color, inBeam);
-    }
-    if (note.tuplet !== null && note.tupletIdx === 0) {
-      drawTuplet(note, patternNotes, nX, staffY);
-    }
+    const jud = judgments[i];
+    if (!jud) { noteIdx++; continue; }
+    const el = allNoteEls[i];
+    if (!el) { noteIdx++; continue; }
+    let color = '#111';
+    if (jud.type === 'perfect') color = '#007a30';
+    else if (jud.type === 'good') color = '#9a6800';
+    else color = '#cc0015';
+    el.querySelectorAll('path, rect, ellipse').forEach(p => {
+      p.style.fill   = color;
+      p.style.stroke = color;
+    });
+    noteIdx++;
+  }
+}
+
+function drawCursorOverlay(cursorRatio) {
+  const W = vfScoreWidth  || (document.getElementById('scoreWrap').offsetWidth || window.innerWidth);
+  const H = vfScoreHeight || 160;
+  const dpr = window.devicePixelRatio || 1;
+
+  // Resize if needed
+  if (cursorCanvas.width !== Math.round(W * dpr)) {
+    cursorCanvas.width  = Math.round(W * dpr);
+    cursorCanvas.height = Math.round(H * dpr);
+    cursorCanvas.style.height = H + 'px';
+    cctx.scale(dpr, dpr);
   }
 
-  // ── Tap marks ──
+  cctx.clearRect(0, 0, W, H);
+
+  // Tap marks
   for (const tm of tapMarks) {
-    const x = noteXCalc(tm.gridPos, scoreLeft, scoreW);
-    ctx.strokeStyle = 'rgba(200,20,50,0.5)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(x, staffY - 26);
-    ctx.lineTo(x, staffY + 26);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const x = gridPosToX(tm.gridPos);
+    if (x === null) continue;
+    cctx.strokeStyle = 'rgba(200,20,50,0.5)';
+    cctx.lineWidth = 1.5;
+    cctx.setLineDash([3, 3]);
+    cctx.beginPath();
+    cctx.moveTo(x, 10);
+    cctx.lineTo(x, H - 10);
+    cctx.stroke();
+    cctx.setLineDash([]);
   }
 
-  // ── Cursor ──
-  if (cursorRatio !== undefined && cursorRatio >= 0 && cursorRatio <= 1.001) {
-    const cursorGrid = Math.min(cursorRatio * GRID_TOTAL, GRID_TOTAL - 1);
-    const cx = noteXCalc(cursorGrid, scoreLeft, scoreW);
-    ctx.strokeStyle = '#e8002a';
-    ctx.lineWidth = 2.5;
-    ctx.globalAlpha = 0.85;
-    ctx.beginPath();
-    ctx.moveTo(cx, staffY - 30);
-    ctx.lineTo(cx, staffY + 30);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-}
-
-function drawNoteHead(x, staffY, note, color, inBeamGroup) {
-  const dur = note.gridDur;
-  const isOpen = dur >= DUR.half;
-  const stemTop = staffY - STEM_H;
-  const stemX = x + NOTE_R_W;  // right side of head, stem goes up
-
-  ctx.fillStyle = color;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.8;
-
-  // Note head: slightly tilted ellipse
-  ctx.beginPath();
-  ctx.ellipse(x, staffY, NOTE_R_W, NOTE_R_H, -0.25, 0, Math.PI * 2);
-  if (isOpen) {
-    ctx.stroke();
-  } else {
-    ctx.fill();
-  }
-
-  // Whole note: no stem
-  if (dur >= DUR.whole - 5) {
-    if (dur > DUR.whole + 5) drawDot(x + NOTE_R_W + 5, staffY - 2, color);
-    return;
-  }
-
-  // Stem (upward from right side of head)
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  ctx.moveTo(stemX, staffY - NOTE_R_H + 1);
-  ctx.lineTo(stemX, stemTop);
-  ctx.stroke();
-
-  // Flags (only when not beamed)
-  if (!inBeamGroup) {
-    if (dur <= DUR.sixteenth + 5) {
-      drawFlagUp(stemX, stemTop, color, 2);
-    } else if (dur <= DUR.eighth + 5) {
-      drawFlagUp(stemX, stemTop, color, 1);
+  // Cursor
+  if (cursorRatio !== undefined && cursorRatio !== null && cursorRatio >= 0 && cursorRatio <= 1.001) {
+    const cursorGrid = Math.min(cursorRatio * GRID_TOTAL, GRID_TOTAL - 0.1);
+    const cx = gridPosToX(cursorGrid);
+    if (cx !== null) {
+      cctx.strokeStyle = '#e8002a';
+      cctx.lineWidth = 2.5;
+      cctx.globalAlpha = 0.85;
+      cctx.beginPath();
+      cctx.moveTo(cx, 8);
+      cctx.lineTo(cx, H - 8);
+      cctx.stroke();
+      cctx.globalAlpha = 1;
     }
   }
+}
 
-  // Augmentation dot
-  if (dur === DUR.dottedHalf || dur === DUR.dottedQuarter || dur === DUR.dottedEighth) {
-    drawDot(x + NOTE_R_W + 5, staffY - 2, color);
+// Interpolate pixel X from gridPos using noteXPositions
+function gridPosToX(gridPos) {
+  if (!noteXPositions.length) {
+    // Fallback: linear mapping using stave boundaries
+    const W = vfScoreWidth || window.innerWidth;
+    return 10 + (gridPos / GRID_TOTAL) * (W - 20);
   }
-}
+  const totalMs = TOTAL_BEATS * (60 / bpm) * 1000;
+  const sorted = [...noteXPositions].sort((a, b) => a.gridStart - b.gridStart);
 
-function drawFlagUp(sx, stemTop, color, count) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.8;
-  for (let f = 0; f < count; f++) {
-    const fy = stemTop + f * 8;
-    ctx.beginPath();
-    ctx.moveTo(sx, fy);
-    ctx.bezierCurveTo(sx + 13, fy + 5, sx + 14, fy + 13, sx + 1, fy + 18);
-    ctx.stroke();
+  if (gridPos <= sorted[0].gridStart) return sorted[0].x;
+  if (gridPos >= sorted[sorted.length - 1].gridStart) return sorted[sorted.length - 1].x;
+
+  // Linear interpolation between surrounding notes
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i], b = sorted[i + 1];
+    if (gridPos >= a.gridStart && gridPos <= b.gridStart) {
+      const t = (gridPos - a.gridStart) / (b.gridStart - a.gridStart);
+      return a.x + t * (b.x - a.x);
+    }
   }
+  return sorted[sorted.length - 1].x;
 }
 
-function drawDot(x, y, color) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x, y, 2.8, 0, Math.PI * 2);
-  ctx.fill();
+function setupCanvas() {
+  // With VexFlow, canvas setup happens inside renderVexFlow()
+  // This is kept for API compatibility
 }
 
-function drawRest(x, staffY, gridDur, color) {
-  ctx.fillStyle = color;
-  ctx.strokeStyle = color;
 
-  if (gridDur >= DUR.whole - 5) {
-    // Whole rest: thick rectangle hanging below imaginary upper line
-    ctx.fillRect(x - 10, staffY - 10, 20, 8);
-  } else if (gridDur >= DUR.half - 5) {
-    // Half rest: thick rectangle sitting on staff line
-    ctx.fillRect(x - 10, staffY + 2, 20, 8);
-  } else if (gridDur >= DUR.quarter - 5) {
-    // Quarter rest: standard squiggle
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x + 3, staffY - 14);
-    ctx.bezierCurveTo(x + 9, staffY - 10, x + 5, staffY - 5, x - 1, staffY - 3);
-    ctx.lineTo(x - 5, staffY + 2);
-    ctx.bezierCurveTo(x - 2, staffY + 5, x + 5, staffY + 6, x + 2, staffY + 13);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
-  } else if (gridDur >= DUR.eighth - 5) {
-    // Eighth rest
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x - 1, staffY - 9);
-    ctx.lineTo(x + 4, staffY + 7);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x + 4, staffY + 7, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineCap = 'butt';
-  } else {
-    // Sixteenth rest: two-dot diagonal
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x, staffY - 11);
-    ctx.lineTo(x + 5, staffY + 9);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(x + 5, staffY + 9, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + 2, staffY + 1, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.lineCap = 'butt';
-  }
-}
 
-function drawTuplet(firstNote, allNotes, nX, staffY) {
-  const count = firstNote.tuplet;
-  const beatStart = firstNote.gridStart;
-  const beatEnd = beatStart + GRID_BEAT;
-  const grp = allNotes.filter(n => n.tuplet === count && n.gridStart >= beatStart && n.gridStart < beatEnd);
-  if (grp.length < 2) return;
-
-  const x1 = nX(grp[0].gridStart) - NOTE_R_W - 2;
-  const x2 = nX(grp[grp.length - 1].gridStart) + NOTE_R_W + 2;
-  // Bracket sits just above the noteheads (staff line level - small offset)
-  const bracketY = staffY - STEM_H - 14;  // above the beam
-  const tickH = 5;
-
-  ctx.strokeStyle = '#333';
-  ctx.fillStyle = '#111';
-  ctx.lineWidth = 1.4;
-
-  ctx.beginPath();
-  ctx.moveTo(x1, bracketY + tickH);
-  ctx.lineTo(x1, bracketY);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(x2, bracketY + tickH);
-  ctx.lineTo(x2, bracketY);
-  ctx.stroke();
-
-  ctx.font = 'bold 12px Georgia, serif';
-  ctx.textAlign = 'center';
-  const numW = ctx.measureText(count).width + 6;
-  const mid = (x1 + x2) / 2;
-
-  ctx.beginPath();
-  ctx.moveTo(x1, bracketY);
-  ctx.lineTo(mid - numW / 2, bracketY);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(mid + numW / 2, bracketY);
-  ctx.lineTo(x2, bracketY);
-  ctx.stroke();
-
-  ctx.fillStyle = '#111';
-  ctx.fillText(count, mid, bracketY - 1);
-}
 
 // ═══════════════════════════════════════════════════════
 // SESSION CONTROL
@@ -1250,13 +1174,13 @@ function endSession() {
   sessionPhase = 'done';
   cancelAnimationFrame(animFrameId);
   clearInterval(micCheckInterval);
-  // Check unmatched notes as MISS
   for (let i = 0; i < patternNotes.length; i++) {
     if (!patternNotes[i].isRest && judgments[i] === null) {
       judgments[i] = { type: 'miss', delta: 999 };
     }
   }
-  drawScore(null);
+  applyJudgmentColors();
+  drawCursorOverlay(null);
   showResult();
 }
 
@@ -1295,10 +1219,10 @@ function newPattern() {
 function startCursorAnim() {
   function frame() {
     if (sessionPhase !== 'playing') return;
-    const elapsed = performance.now() - animStartPN; // ms
+    const elapsed = performance.now() - animStartPN;
     const totalMs = TOTAL_BEATS * beatInterval * 1000;
     const ratio = Math.max(0, Math.min(1, elapsed / totalMs));
-    drawScore(ratio);
+    drawCursorOverlay(ratio);
     if (ratio < 1) animFrameId = requestAnimationFrame(frame);
   }
   animFrameId = requestAnimationFrame(frame);
@@ -1624,11 +1548,9 @@ function showToast(msg) {
 // ═══════════════════════════════════════════════════════
 window.addEventListener('load', () => {
   renderLevelGrid();
-  setupCanvas();
   window.addEventListener('resize', () => {
     if (document.getElementById('playScreen').classList.contains('active')) {
-      setupCanvas();
-      if (patternNotes.length) drawScore(undefined);
+      renderVexFlow();
     }
   });
 });
