@@ -597,7 +597,7 @@ const GRID = 1260; // LCM(4,3,5,6,7,9,... for tuplets)
 const BEATS_PER_MEASURE = 4;
 const MEASURES = 2;
 const TOTAL_BEATS = BEATS_PER_MEASURE * MEASURES;
-const CANVAS_H = 175;
+const CANVAS_H = 210;
 
 let ac = null;
 let bpm = 80;
@@ -802,15 +802,22 @@ function setupCanvas() {
 }
 
 // ── Layout constants for notation (stem-UP style) ──
-const STAFF_Y_RATIO = 0.62;  // staff line lower, stems go up
-const NOTE_R_W = 7;
-const NOTE_R_H = 5.2;
-const STEM_H = 40;
-const BEAM_THICK = 5;
-const BEAM_GAP = 7;
+const STAFF_Y_RATIO = 0.68;  // staff line lower, stems go up with room above
+const NOTE_R_W = 8;
+const NOTE_R_H = 6;
+const STEM_H = 46;
+const BEAM_THICK = 6;
+const BEAM_GAP = 8;
 
 function noteXCalc(gridStart, scoreLeft, scoreW) {
-  return scoreLeft + (gridStart / GRID_TOTAL) * scoreW;
+  // Each measure gets a small inset padding so notes don't sit on barlines
+  const PAD = 10; // px padding inside each measure from barline
+  const measureW = scoreW / MEASURES;
+  const measureIdx = Math.floor(gridStart / GRID_MEASURE);
+  const posInMeasure = gridStart % GRID_MEASURE;
+  const innerW = measureW - PAD * 2;
+  const measureLeft = scoreLeft + measureIdx * measureW + PAD;
+  return measureLeft + (posInMeasure / GRID_MEASURE) * innerW;
 }
 
 function drawScore(cursorRatio) {
@@ -927,7 +934,7 @@ function drawScore(cursorRatio) {
 
   // ── Tap marks ──
   for (const tm of tapMarks) {
-    const x = sL + tm.xRatio * sW;
+    const x = noteXCalc(tm.gridPos, sL, sW);
     ctx.strokeStyle = 'rgba(200,20,50,0.5)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 3]);
@@ -940,13 +947,15 @@ function drawScore(cursorRatio) {
 
   // ── Cursor ──
   if (cursorRatio !== undefined && cursorRatio >= 0 && cursorRatio <= 1) {
-    const cx = sL + cursorRatio * sW;
+    // Map ratio to grid position, then use noteXCalc for consistent spacing
+    const cursorGrid = cursorRatio * GRID_TOTAL;
+    const cx = noteXCalc(Math.min(cursorGrid, GRID_TOTAL - 1), sL, sW);
     ctx.strokeStyle = '#e8002a';
-    ctx.lineWidth = 2.2;
-    ctx.globalAlpha = 0.82;
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 0.85;
     ctx.beginPath();
-    ctx.moveTo(cx, staffY - 28);
-    ctx.lineTo(cx, staffY + 28);
+    ctx.moveTo(cx, staffY - 30);
+    ctx.lineTo(cx, staffY + 30);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -1208,15 +1217,32 @@ function endSession() {
 }
 
 function replaySession() {
+  // Same pattern, replay
   showScreen('playScreen');
+  patternNotes = generatePattern(currentLevel, currentPatternSeed);
+  judgments = new Array(patternNotes.length).fill(null);
+  tapMarks = [];
+  setupCanvas();
+  drawScore(undefined);
+  document.getElementById('startBtn').style.display = '';
+  document.getElementById('tapBtn').disabled = true;
+  updatePhaseDisplay('', '– READY –');
   startSession();
 }
 
 function newPattern() {
+  // Fresh random pattern
   currentPatternSeed = Date.now();
   showScreen('playScreen');
-  stopSession();
+  setupCanvas();
+  document.getElementById('curLvLabel').textContent = currentLevel;
+  patternNotes = generatePattern(currentLevel, currentPatternSeed);
+  judgments = new Array(patternNotes.length).fill(null);
+  tapMarks = [];
   drawScore(undefined);
+  document.getElementById('startBtn').style.display = '';
+  document.getElementById('tapBtn').disabled = true;
+  updatePhaseDisplay('', '– READY –');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1246,9 +1272,10 @@ function handleTap(e) {
   judgeLastTap(tapMs);
   flashTapBtn();
 
-  // tap mark on canvas
+  // tap mark: store as grid position
   const totalMs = TOTAL_BEATS * beatInterval * 1000;
-  tapMarks.push({ xRatio: Math.max(0, Math.min(1, tapMs / totalMs)) });
+  const gridPos = Math.max(0, Math.min(GRID_TOTAL - 1, (tapMs / totalMs) * GRID_TOTAL));
+  tapMarks.push({ gridPos });
 }
 
 function judgeLastTap(tapMs) {
@@ -1346,7 +1373,9 @@ function startMicListening() {
         const tapMs = (tapAC - patternStartAC) * 1000;
         judgeLastTap(tapMs);
         flashTapBtn();
-        tapMarks.push({ xRatio: Math.max(0, Math.min(1, tapMs / (TOTAL_BEATS * beatInterval * 1000))) });
+        const totalMs2 = TOTAL_BEATS * beatInterval * 1000;
+        const gp = Math.max(0, Math.min(GRID_TOTAL - 1, (tapMs / totalMs2) * GRID_TOTAL));
+        tapMarks.push({ gridPos: gp });
       }
     }
     prevRMS = rms;
