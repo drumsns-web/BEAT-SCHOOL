@@ -2,2413 +2,1550 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<script src="https://cdn.jsdelivr.net/npm/@coderline/alphatab@1.3.0/dist/alphaTab.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>リズム初見練習 — スネアトレーナー</title>
+<title>SNARE SIGHT – リズム初見読譜トレーナー</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Music&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;700&family=Bebas+Neue&family=Noto+Sans+JP:wght@400;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=Noto+Sans+JP:wght@400;700&display=swap');
 
-:root {
-  --paper: #fdf8f0;
-  --paper2: #f5efe2;
-  --ink: #1a1408;
-  --ink2: #3a3020;
-  --staff: #2a2010;
-  --accent: #c8390a;
-  --accent2: #1a6b3a;
-  --gold: #c8920a;
-  --blue: #c8a000;
-  --muted: #8a7a60;
-  --border: #c8b890;
-  --shadow: rgba(50,30,0,0.12);
-}
-
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-body {
-  background: var(--paper2);
-  color: var(--ink);
-  font-family: 'Noto Sans JP', sans-serif;
-  min-height: 100vh;
-  overflow-x: hidden;
-  background-image:
-    repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(200,180,140,0.15) 28px),
-    repeating-linear-gradient(90deg, transparent, transparent 27px, rgba(200,180,140,0.08) 28px);
-}
-
-/* HEADER */
-header {
-  background: var(--ink);
-  color: var(--paper);
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-}
-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(255,255,255,0.02) 6px, rgba(255,255,255,0.02) 12px);
-}
-.header-top {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  position: relative;
-  z-index: 1;
-}
-.app-title {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  color: var(--paper);
-}
-.app-subtitle {
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: var(--muted);
-  font-weight: 400;
-  margin-top: 1px;
-}
-.header-score {
-  text-align: right;
-}
-.score-val {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 26px;
-  color: var(--gold);
-  letter-spacing: 2px;
-  line-height: 1;
-}
-.score-label {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: var(--muted);
-}
-
-/* LEVEL BAR */
-.level-bar {
-  width: 100%;
-  background: rgba(255,255,255,0.05);
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-  position: relative;
-  z-index: 1;
-}
-.level-chip {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 13px;
-  letter-spacing: 2px;
-  color: var(--gold);
-  border: 1px solid var(--gold);
-  padding: 2px 10px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
-.level-desc {
-  font-size: 11px;
-  color: rgba(255,255,255,0.5);
-  letter-spacing: 1px;
-  flex: 1;
-}
-.xp-wrap { width: 80px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; flex-shrink: 0; }
-.xp-fill { height: 100%; background: linear-gradient(90deg, var(--gold), #f0c040); border-radius: 2px; transition: width 0.6s ease; }
-.streak-badge {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 13px;
-  letter-spacing: 1px;
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-/* MAIN */
-main { padding: 12px 14px; }
-
-/* INFO ROW */
-.info-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.time-sig {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 13px;
-  color: var(--muted);
-  letter-spacing: 1px;
-}
-.bpm-chip {
-  background: var(--ink);
-  color: var(--paper);
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 15px;
-  letter-spacing: 3px;
-  padding: 4px 12px;
-  border-radius: 3px;
-}
-.pattern-num {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* SHEET MUSIC AREA */
-.sheet-wrap {
-  background: white;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 16px 10px 20px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 12px var(--shadow), inset 0 1px 0 rgba(255,255,255,0.8);
-  position: relative;
-  overflow: hidden;
-}
-.sheet-wrap::before {
-  content: '';
-  position: absolute;
-  left: 30px;
-  top: 0; bottom: 0;
-  width: 1px;
-  background: rgba(200,150,100,0.15);
-}
-canvas#staffCanvas {
-  width: 100%;
-  display: block;
-}
-
-/* PLAYBACK CURSOR */
-.cursor-line {
-  position: absolute;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  background: rgba(200,57,10,0.6);
-  border-radius: 1px;
-  pointer-events: none;
-  display: none;
-  box-shadow: 0 0 6px rgba(200,57,10,0.4);
-}
-
-/* FEEDBACK */
-.feedback-zone {
-  min-height: 52px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 10px;
-  gap: 4px;
-}
-.feedback-main {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 42px;
-  letter-spacing: 5px;
-  line-height: 1;
-  transition: all 0.08s;
-}
-.feedback-main.perfect { color: var(--accent2); }
-.feedback-main.good    { color: var(--gold); }
-.feedback-main.early   { color: var(--blue); }
-.feedback-main.late    { color: var(--blue); }
-.feedback-main.miss    { color: var(--accent); }
-.feedback-main.ready   { color: var(--muted); font-size: 22px; letter-spacing: 4px; }
-.feedback-sub {
-  font-size: 11px;
-  letter-spacing: 2px;
-  color: var(--muted);
-}
-
-/* DOTS */
-.dots-row {
-  display: flex;
-  justify-content: center;
-  gap: 5px;
-  flex-wrap: wrap;
-  min-height: 14px;
-  margin-bottom: 10px;
-}
-.dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border);
-  background: var(--paper2);
-  flex-shrink: 0;
-}
-.dot.p { background: var(--accent2); border-color: var(--accent2); }
-.dot.g { background: var(--gold); border-color: var(--gold); }
-.dot.m { background: var(--accent); border-color: var(--accent); }
-.dot.e,.dot.l { background: var(--blue); border-color: var(--blue); }
-
-/* TAP BUTTON */
-.tap-area {
-  width: 100%;
-  height: 100px;
-  background: var(--ink);
-  border: none;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.06s;
-  margin-bottom: 12px;
-  position: relative;
-  overflow: hidden;
-  -webkit-user-select: none;
-  user-select: none;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.05) inset;
-}
-.tap-area::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at center 30%, rgba(255,255,255,0.04) 0%, transparent 70%);
-}
-.tap-area:active, .tap-area.hit {
-  background: #2a1a0a;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.4), 0 0 30px rgba(200,57,10,0.15) inset;
-  transform: scale(0.985);
-}
-.tap-icon {
-  font-size: 30px;
-  margin-bottom: 4px;
-  line-height: 1;
-  filter: grayscale(0.3);
-}
-.tap-label {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 18px;
-  letter-spacing: 8px;
-  color: rgba(255,255,255,0.5);
-}
-.tap-ripple {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.08);
-  transform: scale(0);
-  animation: ripple 0.4s ease-out forwards;
-  pointer-events: none;
-}
-@keyframes ripple {
-  to { transform: scale(4); opacity: 0; }
-}
-
-/* CONTROLS */
-.controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.btn {
-  padding: 12px;
-  background: white;
-  border: 1.5px solid var(--border);
-  border-radius: 4px;
-  color: var(--ink);
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-align: center;
-  letter-spacing: 1px;
-  box-shadow: 0 1px 4px var(--shadow);
-}
-.btn:hover { background: var(--paper2); }
-.btn:active { transform: scale(0.97); }
-.btn.start {
-  grid-column: 1 / -1;
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
-  font-size: 15px;
-  padding: 14px;
-  letter-spacing: 3px;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-}
-.btn.start:hover { background: var(--ink2); }
-.btn.listen-btn { border-color: var(--blue); color: var(--blue); }
-.btn.next-btn { border-color: var(--accent2); color: var(--accent2); }
-
-/* LEVEL SELECT */
-.level-select-wrap {
-  margin-bottom: 12px;
-}
-.level-select-title {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 11px;
-  letter-spacing: 3px;
-  color: var(--muted);
-  margin-bottom: 6px;
-  text-align: center;
-}
-.level-pills {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.level-pill {
-  padding: 5px 10px;
-  background: white;
-  border: 1.5px solid var(--border);
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  letter-spacing: 0.5px;
-}
-.level-pill.active {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-}
-.level-pill.locked {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* RESULT CARD */
-.result-card {
-  background: white;
-  border: 1.5px solid var(--border);
-  border-radius: 4px;
-  padding: 14px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px var(--shadow);
-  display: none;
-}
-.result-title {
-  font-family: 'Shippori Mincho', serif;
-  font-size: 11px;
-  letter-spacing: 4px;
-  color: var(--muted);
-  text-align: center;
-  margin-bottom: 10px;
-}
-.result-grade {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 56px;
-  text-align: center;
-  letter-spacing: 4px;
-  line-height: 1;
-  margin-bottom: 6px;
-}
-.grade-S { color: var(--gold); }
-.grade-A { color: var(--accent2); }
-.grade-B { color: var(--blue); }
-.grade-C { color: var(--muted); }
-.grade-D { color: var(--accent); }
-.result-stats {
-  display: grid;
-  grid-template-columns: repeat(4,1fr);
-  gap: 6px;
-}
-.stat-box {
-  background: var(--paper2);
-  border-radius: 3px;
-  padding: 8px 4px;
-  text-align: center;
-}
-.stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 22px; line-height: 1; }
-.stat-lbl { font-size: 9px; letter-spacing: 1px; color: var(--muted); margin-top: 2px; }
-.stat-val.sv-p { color: var(--accent2); }
-.stat-val.sv-g { color: var(--gold); }
-.stat-val.sv-m { color: var(--accent); }
-.stat-val.sv-a { color: var(--blue); }
-
-/* BPM slider */
-.bpm-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: white;
-  border: 1.5px solid var(--border);
-  border-radius: 4px;
-  padding: 10px 14px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 4px var(--shadow);
-}
-.bpm-label { font-size: 11px; letter-spacing: 2px; color: var(--muted); flex-shrink: 0; font-weight: 700; }
-input[type=range] {
-  flex: 1;
-  -webkit-appearance: none;
-  height: 3px;
-  background: var(--border);
-  border-radius: 2px;
-  outline: none;
-}
-input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px; height: 16px;
-  border-radius: 50%;
-  background: var(--ink);
-  cursor: pointer;
-}
-.bpm-num {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 20px;
-  color: var(--ink);
-  min-width: 40px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-  /* ===== マイク入力モード ===== */
-  .mic-section {
-    margin-bottom: 10px;
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --accent: #ff3b5c;
+    --accent2: #00e5ff;
+    --accent3: #ffd600;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --perfect: #00e676;
+    --good: #ffd600;
+    --miss: #ff3b5c;
+    --font-mono: 'Space Mono', monospace;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-jp: 'Noto Sans JP', sans-serif;
   }
-  .input-mode-row {
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-jp);
+    min-height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ─── SCREENS ─── */
+  .screen { display: none; width: 100%; height: 100vh; flex-direction: column; align-items: center; }
+  .screen.active { display: flex; }
+
+  /* ─── HOME SCREEN ─── */
+  #homeScreen {
+    justify-content: flex-start;
+    padding: 0;
+    background: var(--bg);
+    position: relative;
+    overflow: hidden;
+  }
+  #homeScreen::before {
+    content: '';
+    position: absolute;
+    top: -120px; left: 50%; transform: translateX(-50%);
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(255,59,92,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .home-header {
+    width: 100%;
+    padding: 48px 24px 24px;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+  .home-logo {
+    font-family: var(--font-display);
+    font-size: clamp(52px, 14vw, 80px);
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    line-height: 1;
+    text-shadow: 0 0 60px rgba(255,59,92,0.4);
+  }
+  .home-sub {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--text2);
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+
+  .level-grid {
+    width: 100%;
+    padding: 8px 16px 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 8px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    flex: 1;
+    overflow-y: auto;
+    max-height: calc(100vh - 220px);
   }
-  .mode-btn {
+  .level-btn {
+    aspect-ratio: 1;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    padding: 14px 8px;
-    background: white;
-    border: 3px solid var(--border);
-    border-radius: 12px;
+    gap: 2px;
     cursor: pointer;
     transition: all 0.15s;
-    box-shadow: 0 3px 0 var(--border);
-    -webkit-user-select: none;
-    user-select: none;
-    min-height: 90px;
+    position: relative;
+    overflow: hidden;
   }
-  .mode-btn:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 var(--border);
-  }
-  .mode-btn.active {
-    background: var(--ink);
-    border-color: var(--ink);
-    box-shadow: 0 3px 0 #000;
-    color: white;
-  }
-  .mode-btn.active .mode-desc { color: rgba(255,255,255,0.5); }
-  .mode-icon { font-size: 32px; line-height: 1; }
-  .mode-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 20px;
-    letter-spacing: 3px;
+  .level-btn.locked { opacity: 0.35; }
+  .level-btn.unlocked { border-color: var(--border); }
+  .level-btn.unlocked:active { transform: scale(0.93); background: var(--surface2); }
+  .level-btn .lv-num {
+    font-family: var(--font-display);
+    font-size: 28px;
+    color: var(--text);
     line-height: 1;
-    color: var(--ink);
   }
-  .mode-btn.active .mode-label { color: white; }
-  .mode-desc {
+  .level-btn .lv-label {
+    font-size: 9px;
+    color: var(--text2);
+    font-family: var(--font-mono);
+    letter-spacing: 0.05em;
+  }
+  .level-btn .lv-stars {
     font-size: 10px;
     letter-spacing: 1px;
-    color: var(--muted);
-    font-family: 'Noto Sans JP', sans-serif;
+    margin-top: 2px;
   }
-  .mic-info-box {
-    background: white;
-    border: 1.5px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    display: none;
-    flex-direction: column;
-    gap: 8px;
-    box-shadow: 0 2px 6px var(--shadow);
-  }
-  .mic-info-box.show { display: flex; }
-  .mic-status-row {
+  .level-btn.best-s { border-color: var(--accent3); background: rgba(255,214,0,0.06); }
+  .level-btn.best-s .lv-num { color: var(--accent3); }
+
+  .home-footer {
+    width: 100%;
+    padding: 12px 16px 24px;
     display: flex;
-    align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
-  .mic-dot {
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    background: var(--border);
-    flex-shrink: 0;
-    transition: background 0.1s;
-  }
-  .mic-dot.on  { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
-  .mic-dot.hit { background: var(--accent);  box-shadow: 0 0 8px var(--accent); }
-  .mic-state-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 16px;
-    letter-spacing: 2px;
-    color: var(--muted);
+  .footer-btn {
     flex: 1;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text2);
+    font-size: 13px;
+    font-family: var(--font-jp);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
   }
-  .mic-hit-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 18px;
-    letter-spacing: 3px;
-    color: var(--accent);
-    opacity: 0;
-    transition: opacity 0.05s;
+  .footer-btn:active { background: var(--surface2); }
+
+  /* ─── PLAY SCREEN ─── */
+  #playScreen {
+    justify-content: flex-start;
+    background: var(--bg);
   }
-  .mic-hit-label.show { opacity: 1; }
-  .mic-bar-wrap {
-    height: 10px;
-    background: var(--paper2);
-    border-radius: 5px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-  }
-  .mic-bar-fill {
-    height: 100%;
-    width: 0%;
-    background: linear-gradient(90deg, var(--accent2), var(--accent));
-    border-radius: 5px;
-    transition: width 0.04s;
-  }
-  .mic-thresh-row {
+  .play-header {
+    width: 100%;
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    padding: 52px 16px 8px;
+  }
+  .play-header .back-btn {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text2);
+    background: none;
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    padding: 8px 4px;
+  }
+  .play-info {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text2);
+    text-align: right;
+  }
+  .play-info span { color: var(--text); }
+
+  /* BPM control */
+  .bpm-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 4px 16px 8px;
+  }
+  .bpm-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.1s;
+  }
+  .bpm-btn:active { background: var(--surface2); transform: scale(0.9); }
+  .bpm-display {
+    font-family: var(--font-display);
+    font-size: 36px;
+    color: var(--accent);
+    min-width: 90px;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .bpm-label {
+    font-family: var(--font-mono);
     font-size: 10px;
-    letter-spacing: 2px;
-    color: var(--muted);
+    color: var(--text2);
+    letter-spacing: 0.15em;
   }
 
+  /* Score canvas */
+  #scoreCanvas {
+    display: block;
+    width: 100%;
+    max-width: 600px;
+    touch-action: none;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Phase indicator */
+  .phase-display {
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: 0.15em;
+    color: var(--text2);
+    padding: 8px 0 4px;
+    text-align: center;
+    min-height: 36px;
+  }
+  .phase-display.counting { color: var(--accent2); }
+  .phase-display.playing { color: var(--accent); }
+
+  /* beat dots */
+  .beat-dots {
+    display: flex;
+    gap: 10px;
+    padding: 0 0 8px;
+  }
+  .beat-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    transition: background 0.05s;
+  }
+  .beat-dot.active { background: var(--accent); border-color: var(--accent); }
+
+  /* TAP button */
+  .tap-area {
+    flex: 1;
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px 16px;
+    gap: 12px;
+  }
+  #tapBtn {
+    width: 100%;
+    max-width: 340px;
+    height: 110px;
+    border-radius: 20px;
+    border: 2px solid var(--accent);
+    background: rgba(255,59,92,0.08);
+    color: var(--accent);
+    font-family: var(--font-display);
+    font-size: 52px;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.06s;
+    -webkit-user-select: none;
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+  }
+  #tapBtn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(255,59,92,0.15);
+    opacity: 0;
+    transition: opacity 0.06s;
+  }
+  #tapBtn:active::after { opacity: 1; }
+  #tapBtn.flash { background: rgba(255,59,92,0.25); }
+  #tapBtn:disabled { opacity: 0.3; border-color: var(--border); color: var(--text2); }
+
+  .start-btn {
+    width: 100%;
+    max-width: 340px;
+    padding: 18px;
+    border-radius: 16px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .start-btn:active { transform: scale(0.97); }
+
+  .mic-toggle {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text2);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 14px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.1s;
+  }
+  .mic-toggle.on { border-color: var(--accent2); color: var(--accent2); }
+
+  /* ─── RESULT SCREEN ─── */
+  #resultScreen {
+    justify-content: flex-start;
+    padding: 0 16px;
+    overflow-y: auto;
+  }
+  .result-header {
+    width: 100%;
+    padding: 52px 0 16px;
+    text-align: center;
+  }
+  .result-grade {
+    font-family: var(--font-display);
+    font-size: 96px;
+    line-height: 1;
+  }
+  .grade-S { color: var(--accent3); text-shadow: 0 0 40px rgba(255,214,0,0.5); }
+  .grade-A { color: var(--perfect); }
+  .grade-B { color: var(--accent2); }
+  .grade-C { color: var(--text); }
+  .grade-D { color: var(--miss); }
+
+  .result-score {
+    font-family: var(--font-display);
+    font-size: 42px;
+    color: var(--text);
+    margin-top: -8px;
+  }
+  .result-accuracy {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 4px;
+    letter-spacing: 0.1em;
+  }
+
+  .result-stats {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .stat-box {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 14px 8px;
+    text-align: center;
+    border: 1.5px solid var(--border);
+  }
+  .stat-num {
+    font-family: var(--font-display);
+    font-size: 36px;
+    line-height: 1;
+  }
+  .stat-label {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--text2);
+    margin-top: 2px;
+    letter-spacing: 0.05em;
+  }
+  .stat-box.p .stat-num { color: var(--perfect); }
+  .stat-box.g .stat-num { color: var(--good); }
+  .stat-box.m .stat-num { color: var(--miss); }
+
+  .result-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 32px;
+  }
+  .result-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.1s;
+    border: none;
+  }
+  .result-btn:active { transform: scale(0.97); }
+  .result-btn.primary { background: var(--accent); color: #fff; }
+  .result-btn.secondary { background: var(--surface); color: var(--text); border: 1.5px solid var(--border); }
+  .result-btn.weak { background: var(--surface); color: var(--accent2); border: 1.5px solid var(--accent2); font-size: 16px; font-family: var(--font-jp); letter-spacing: 0; }
+
+  /* ─── WEAK SCREEN ─── */
+  #weakScreen {
+    justify-content: flex-start;
+    padding: 0 16px;
+    overflow-y: auto;
+  }
+  .weak-header {
+    width: 100%;
+    padding: 52px 0 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .weak-header h2 {
+    font-family: var(--font-display);
+    font-size: 32px;
+    color: var(--accent2);
+    letter-spacing: 0.1em;
+  }
+  .weak-list { width: 100%; display: flex; flex-direction: column; gap: 10px; padding-bottom: 32px; }
+  .weak-item {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .weak-item-info { font-size: 13px; color: var(--text2); font-family: var(--font-mono); }
+  .weak-item-info span { color: var(--text); display: block; font-size: 15px; }
+  .weak-play-btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1.5px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .weak-play-btn:active { background: rgba(255,59,92,0.1); }
+  .weak-del-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    margin-left: 6px;
+  }
+
+  /* ─── TOAST ─── */
+  #toast {
+    position: fixed;
+    bottom: 120px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 10px 20px;
+    border-radius: 20px;
+    opacity: 0;
+    transition: all 0.25s;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Judgment popup */
+  #judgePop {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.7);
+    font-family: var(--font-display);
+    font-size: 52px;
+    letter-spacing: 0.15em;
+    pointer-events: none;
+    opacity: 0;
+    transition: all 0.12s;
+    z-index: 50;
+  }
+  #judgePop.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #judgePop.perfect { color: var(--perfect); }
+  #judgePop.good { color: var(--good); }
+  #judgePop.miss { color: var(--miss); }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="header-top">
-    <div>
-      <div class="app-title">初見リズム練習</div>
-      <div class="app-subtitle">SNARE SIGHT-READING TRAINER</div>
-    </div>
-    <div class="header-score">
-      <div class="score-val" id="scoreVal">0</div>
-      <div class="score-label">TOTAL SCORE</div>
-    </div>
+<!-- HOME -->
+<div id="homeScreen" class="screen active">
+  <div class="home-header">
+    <div class="home-logo">SNARE SIGHT</div>
+    <div class="home-sub">RHYTHM SIGHT-READING TRAINER</div>
   </div>
-  <div class="level-bar">
-    <div class="level-chip" id="levelChip">Lv.1</div>
-    <div class="level-desc" id="levelDesc">四分音符のみ</div>
-    <div class="streak-badge" id="streakBadge"></div>
-    <div class="xp-wrap"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+  <div class="level-grid" id="levelGrid"></div>
+  <div class="home-footer">
+    <button class="footer-btn" onclick="showScreen('weakScreen'); renderWeakList()">苦手パターン</button>
+    <button class="footer-btn" onclick="showToast('設定は開発中です')">設定</button>
   </div>
-</header>
+</div>
 
-<main>
-  <!-- Level Select -->
-  <div class="level-select-wrap">
-    <div class="level-select-title">— LEVEL —</div>
-    <div class="level-pills" id="levelPills"></div>
+<!-- PLAY -->
+<div id="playScreen" class="screen">
+  <div class="play-header">
+    <button class="back-btn" onclick="stopSession(); showScreen('homeScreen')">← BACK</button>
+    <div class="play-info">Lv.<span id="curLvLabel">1</span> &nbsp;|&nbsp; <span id="curBeatLabel">4</span>/4</div>
   </div>
-
-  <!-- 入力モード -->
-  <div class="mic-section">
-    <div class="input-mode-row">
-      <div class="mode-btn active" id="modeTap" ontouchstart="setInputMode('tap')" onclick="setInputMode('tap')">
-        <span class="mode-icon">👆</span>
-        <span class="mode-label">TAP</span>
-        <span class="mode-desc">画面をタップ</span>
-      </div>
-      <div class="mode-btn" id="modeMic" ontouchstart="setInputMode('mic')" onclick="setInputMode('mic')">
-        <span class="mode-icon">🎤</span>
-        <span class="mode-label">MIC</span>
-        <span class="mode-desc">打音・声で入力</span>
-      </div>
-    </div>
-    <!-- MICモード時の情報ボックス -->
-    <div class="mic-info-box" id="micInfoBox">
-      <div class="mic-status-row">
-        <div class="mic-dot" id="micDot"></div>
-        <span class="mic-state-label" id="micStateLabel">マイク起動中...</span>
-        <span class="mic-hit-label" id="micHitLabel">HIT!</span>
-      </div>
-      <div class="mic-bar-wrap">
-        <div class="mic-bar-fill" id="micBarFill"></div>
-      </div>
-      <div class="mic-thresh-row">
-        <span>感度（高←→低）</span>
-        <input type="range" id="micThresh" min="3" max="300" value="30" style="flex:1;"
-          oninput="micThreshold=+this.value;document.getElementById('micThreshVal').textContent=this.value">
-        <span id="micThreshVal">30</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- BPM -->
   <div class="bpm-row">
-    <span class="bpm-label">BPM</span>
-    <input type="range" id="bpmSlider" min="40" max="160" value="70" oninput="setBpm(+this.value)">
-    <span class="bpm-num" id="bpmNum">70</span>
-  </div>
-
-  <!-- Info -->
-  <div class="info-row">
-    <div class="time-sig" id="timeSigLabel">4/4拍子</div>
-    <div class="bpm-chip" id="bpmChip">♩= 70</div>
-    <div class="pattern-num" id="patNumLabel">パターン #1</div>
-  </div>
-
-  <!-- Sheet -->
-  <div class="sheet-wrap" id="sheetWrap">
-    <!-- AlphaTab譜面コンテナ -->
-    <div id="atContainer" style="line-height:0;"></div>
-    <!-- カーソル -->
-    <div class="cursor-line" id="cursorLine"></div>
-    <!-- タップ位置ライン（複数表示） -->
-    <div id="tapLineLayer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;"></div>
-  </div>
-
-  <!-- Feedback -->
-  <div class="feedback-zone">
-    <div class="feedback-main ready" id="feedbackMain">譜面を読んでスタート</div>
-    <div class="feedback-sub" id="feedbackSub"></div>
-  </div>
-
-  <!-- Dots -->
-  <div class="dots-row" id="dotsRow"></div>
-
-  <!-- Tap -->
-  <div class="tap-area" id="tapArea" ontouchstart="onTap(event)" onmousedown="onTap(event)">
-    <div class="tap-icon">🥁</div>
-    <div class="tap-label">TAP</div>
-  </div>
-
-  <!-- Controls -->
-  <!-- 苦手モードバナー -->
-  <div class="weak-mode-banner" id="weakModeBanner" onclick="exitWeakMode()">
-    ★ 苦手パターン練習中 — タップして通常に戻る
-  </div>
-
-  <div class="controls">
-    <button class="btn start" id="startBtn" onclick="startSession()" ontouchstart="event.preventDefault();startSession()">▶ スタート</button>
-    <button class="btn listen-btn" onclick="listenPattern()">👂 聴く</button>
-    <button class="btn next-btn" onclick="nextPattern()">→ 次のパターン</button>
-    <button class="btn" id="weakBtn" onclick="toggleWeak()" style="border-color:var(--border);color:var(--muted);">☆ 苦手に追加</button>
-    <button class="btn" onclick="toggleWeakPanel()" style="border-color:var(--blue);color:var(--blue);">📋 苦手一覧</button>
-  </div>
-
-  <!-- 苦手パターン一覧 -->
-  <div class="weak-panel" id="weakPanel" style="display:none;">
-    <div class="weak-panel-title">
-      <span>— 苦手パターン一覧 —</span>
-      <button class="btn" onclick="enterWeakMode()" style="font-size:11px;padding:4px 10px;border-color:var(--accent);color:var(--accent);">まとめて練習</button>
+    <button class="bpm-btn" onclick="changeBPM(-5)">−</button>
+    <div>
+      <div class="bpm-display" id="bpmDisplay">80</div>
+      <div class="bpm-label" style="text-align:center">BPM</div>
     </div>
-    <div class="weak-list" id="weakList"></div>
+    <button class="bpm-btn" onclick="changeBPM(+5)">+</button>
   </div>
+  <canvas id="scoreCanvas"></canvas>
+  <div class="phase-display" id="phaseDisplay">– READY –</div>
+  <div class="beat-dots" id="beatDots">
+    <div class="beat-dot"></div>
+    <div class="beat-dot"></div>
+    <div class="beat-dot"></div>
+    <div class="beat-dot"></div>
+  </div>
+  <div class="tap-area">
+    <button id="tapBtn" disabled ontouchstart="handleTap(event)" onmousedown="handleTap(event)">TAP</button>
+    <button class="start-btn" id="startBtn" onclick="startSession()">START</button>
+    <button class="mic-toggle" id="micToggle" onclick="toggleMic()">🎙 MIC OFF</button>
+  </div>
+</div>
 
-  <!-- Result -->
-  <div class="result-card" id="resultCard">
-    <div class="result-title">— RESULT —</div>
-    <div class="result-grade" id="resultGrade">A</div>
-    <div class="result-stats">
-      <div class="stat-box"><div class="stat-val sv-p" id="rP">0</div><div class="stat-lbl">PERFECT</div></div>
-      <div class="stat-box"><div class="stat-val sv-g" id="rG">0</div><div class="stat-lbl">GOOD</div></div>
-      <div class="stat-box"><div class="stat-val sv-m" id="rM">0</div><div class="stat-lbl">MISS</div></div>
-      <div class="stat-box"><div class="stat-val sv-a" id="rAcc">0%</div><div class="stat-lbl">精度</div></div>
-    </div>
+<!-- RESULT -->
+<div id="resultScreen" class="screen">
+  <div class="result-header">
+    <div class="result-grade" id="resultGrade"></div>
+    <div class="result-score" id="resultScore"></div>
+    <div class="result-accuracy" id="resultAccuracy"></div>
   </div>
-</main>
+  <div class="result-stats">
+    <div class="stat-box p"><div class="stat-num" id="rPerfect">0</div><div class="stat-label">PERFECT</div></div>
+    <div class="stat-box g"><div class="stat-num" id="rGood">0</div><div class="stat-label">GOOD</div></div>
+    <div class="stat-box m"><div class="stat-num" id="rMiss">0</div><div class="stat-label">MISS</div></div>
+  </div>
+  <div class="result-actions">
+    <button class="result-btn primary" onclick="replaySession()">もう一度</button>
+    <button class="result-btn secondary" onclick="newPattern()">新しい譜面</button>
+    <button class="result-btn weak" id="weakRegBtn" onclick="registerWeak()">苦手として登録する</button>
+    <button class="result-btn secondary" onclick="showScreen('homeScreen')">ホームに戻る</button>
+  </div>
+</div>
+
+<!-- WEAK -->
+<div id="weakScreen" class="screen">
+  <div class="weak-header">
+    <button class="back-btn" onclick="showScreen('homeScreen')" style="font-family:var(--font-mono);font-size:12px;color:var(--text2);background:none;border:none;cursor:pointer;">← BACK</button>
+    <h2>WEAK PATTERNS</h2>
+  </div>
+  <div class="weak-list" id="weakList"></div>
+</div>
+
+<div id="toast"></div>
+<div id="judgePop"></div>
 
 <script>
-// ============================================================
-// ============================================================
-// LEVEL DEFINITIONS & RANDOM PATTERN GENERATOR
-// ============================================================
+// ═══════════════════════════════════════════════════════
+// CONSTANTS & STATE
+// ═══════════════════════════════════════════════════════
+const PERFECT_MS = 80;
+const GOOD_MS = 200;
+const GRID = 1260; // LCM(4,3,5,6,7,9,... for tuplets)
+const BEATS_PER_MEASURE = 4;
+const MEASURES = 2;
+const TOTAL_BEATS = BEATS_PER_MEASURE * MEASURES;
+const CANVAS_H = 130;
 
-// 各レベルの定義（固定パターンは削除し、ランダム生成ルールのみ持つ）
-const LEVELS = [
-  { id:1,  name:'Lv.1',  desc:'四分音符・四分休符',       timeSig:4, bpm:70  },
-  { id:2,  name:'Lv.2',  desc:'二分音符',                  timeSig:4, bpm:72  },
-  { id:3,  name:'Lv.3',  desc:'八分音符入門 (3/4)',         timeSig:3, bpm:76  },
-  { id:4,  name:'Lv.4',  desc:'八分音符 + 休符 (4/4)',      timeSig:4, bpm:80  },
-  { id:5,  name:'Lv.5',  desc:'付点・シンコペーション',     timeSig:4, bpm:84  },
-  { id:6,  name:'Lv.6',  desc:'十六分音符入門',             timeSig:4, bpm:80  },
-  { id:7,  name:'Lv.7',  desc:'十六分 + 休符',              timeSig:4, bpm:84  },
-  { id:8,  name:'Lv.8',  desc:'三連符',                     timeSig:4, bpm:80  },
-  { id:9,  name:'Lv.9',  desc:'複合リズム',                 timeSig:4, bpm:88  },
-  { id:10, name:'Lv.10', desc:'上級・5拍子',                timeSig:5, bpm:88  },
+let ac = null;
+let bpm = 80;
+let currentLevel = 1;
+let sessionPhase = 'idle'; // idle | counting | playing | done
+let patternNotes = []; // [{gridPos, duration, isRest, tuplet}]
+let taps = [];
+let judgments = []; // per-note: {type, deltaMsRaw}
+let tapMarks = []; // {xRatio} for display
+let countInBeat = 0;
+let animFrameId = null;
+let animStartPN = null; // performance.now at pattern start
+let patternStartAC = null;
+let beatInterval = 0; // seconds per beat
+let micStream = null;
+let micMode = false;
+let analyserNode = null;
+let micCheckInterval = null;
+let lastMicTrigger = 0;
+let scheduledSounds = [];
+let currentPatternSeed = null;
+
+// ═══════════════════════════════════════════════════════
+// SCREEN MANAGEMENT
+// ═══════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'homeScreen') renderLevelGrid();
+}
+
+// ═══════════════════════════════════════════════════════
+// AUDIO CONTEXT
+// ═══════════════════════════════════════════════════════
+function getAC() {
+  if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+
+function synthClick(time, accent) {
+  const a = getAC();
+  const osc = a.createOscillator();
+  const g = a.createGain();
+  osc.frequency.value = accent ? 1200 : 900;
+  g.gain.setValueAtTime(accent ? 0.7 : 0.4, time);
+  g.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+  osc.connect(g); g.connect(a.destination);
+  osc.start(time); osc.stop(time + 0.05);
+}
+
+function synthSnare(time) {
+  const a = getAC();
+  // noise burst
+  const bufLen = a.sampleRate * 0.12;
+  const buf = a.createBuffer(1, bufLen, a.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) d[i] = (Math.random() * 2 - 1);
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const filter = a.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 3000;
+  filter.Q.value = 0.5;
+  const g = a.createGain();
+  g.gain.setValueAtTime(0.5, time);
+  g.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+  src.connect(filter); filter.connect(g); g.connect(a.destination);
+  src.start(time); src.stop(time + 0.13);
+  // tone body
+  const osc = a.createOscillator();
+  const g2 = a.createGain();
+  osc.frequency.setValueAtTime(200, time);
+  osc.frequency.exponentialRampToValueAtTime(80, time + 0.06);
+  g2.gain.setValueAtTime(0.6, time);
+  g2.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+  osc.connect(g2); g2.connect(a.destination);
+  osc.start(time); osc.stop(time + 0.1);
+}
+
+// ═══════════════════════════════════════════════════════
+// PATTERN GENERATION
+// ═══════════════════════════════════════════════════════
+// Each note: { gridStart, gridDur, isRest, tuplet|null }
+// gridDur in 1260 units: quarter=315, eighth=157.5→round to 158 (use 1260/8=157.5 → use 1260/4=315, 1260/8≈158)
+// Actually: GRID per beat = 1260/4 = 315. Full measure = 1260. 2 measures = 2520.
+const GRID_BEAT = GRID / 4; // 315 per beat
+const GRID_MEASURE = GRID;  // 1260 per measure
+const GRID_TOTAL = GRID * MEASURES; // 2520
+
+// Note durations in grid units (relative to 1/4 note = 315)
+const DUR = {
+  whole: 1260,
+  half: 630,
+  dottedHalf: 945,
+  quarter: 315,
+  dottedQuarter: 472, // 315*1.5
+  eighth: 157, // 315/2 ≈ 157.5 → 158 but keep 157 for odd fit
+  dottedEighth: 236,
+  sixteenth: 79, // 315/4
+};
+
+function lcm(a, b) { return a * b / gcd(a, b); }
+function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+// Level configs
+const LEVEL_CFG = [
+  // Lv1: quarter + half only, no rests, no tuplets
+  { notes: ['quarter','half'], restProb: 0, tupletProbs: {} },
+  // Lv2: + eighth
+  { notes: ['quarter','eighth','half'], restProb: 0.05, tupletProbs: {} },
+  // Lv3: + sixteenth
+  { notes: ['quarter','eighth','sixteenth'], restProb: 0.1, tupletProbs: {} },
+  // Lv4: dotted notes
+  { notes: ['quarter','eighth','sixteenth','dottedQuarter','dottedEighth'], restProb: 0.15, tupletProbs: {} },
+  // Lv5: triplets
+  { notes: ['quarter','eighth','sixteenth'], restProb: 0.15, tupletProbs: {3: 0.2} },
+  // Lv6: more rests + triplets
+  { notes: ['quarter','eighth','sixteenth'], restProb: 0.25, tupletProbs: {3: 0.3} },
+  // Lv7: quintuplets
+  { notes: ['quarter','eighth','sixteenth'], restProb: 0.2, tupletProbs: {3: 0.25, 5: 0.15} },
+  // Lv8: sextuplets
+  { notes: ['quarter','eighth','sixteenth'], restProb: 0.25, tupletProbs: {3: 0.2, 5: 0.15, 6: 0.15} },
+  // Lv9: septuplets
+  { notes: ['quarter','eighth','sixteenth'], restProb: 0.25, tupletProbs: {3: 0.2, 5: 0.1, 6: 0.1, 7: 0.1} },
+  // Lv10: everything
+  { notes: ['quarter','eighth','sixteenth','dottedEighth'], restProb: 0.3, tupletProbs: {3: 0.2, 5: 0.1, 6: 0.1, 7: 0.08, 9: 0.05} },
 ];
 
-// Note durations in beats
-const NOTE_DUR    = { q:1, h:2, w:4, r:1, 'q.':1.5, e:0.5, 'e.':0.75, er:0.5, s:0.25, sr:0.25, t:1/3, p5:1/5, p6:1/6, p7:1/7, p9:2/9 };
-const NOTE_IS_REST = { er:true, sr:true, r:true };
-
-// ── ランダムパターン生成 ──────────────────────────────────────
-// 拍数を満たすまで「使えるセル」からランダムに選んで並べる
-function generatePattern(levelIdx) {
-  const lv    = LEVELS[levelIdx];
-  const total = lv.timeSig;
-  const cells = makeCells(levelIdx);
-
-  // セルのbeatsをNOTE_DURから計算（定義ミスを防ぐ）
-  cells.forEach(c => {
-    c.beats = c.notes.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
-  });
-
-  for (let attempt = 0; attempt < 400; attempt++) {
-    const result    = [];
-    let remaining   = total;
-    let ok          = true;
-
-    while (remaining > 0.0001) {
-      const usable = cells.filter(c => c.beats <= remaining + 0.0001);
-      if (!usable.length) { ok = false; break; }
-      const pick = usable[Math.floor(Math.random() * usable.length)];
-      result.push(...pick.notes);
-      remaining = +(remaining - pick.beats).toFixed(6);
-    }
-
-    if (ok && remaining < 0.001) {
-      // 最低1つ実音が必要
-      if (result.some(n => !NOTE_IS_REST[n.t] && n.t !== 'r')) return result;
-    }
-  }
-  // フォールバック
-  return Array.from({length: total}, () => ({t:'q'}));
+// Simple seeded RNG
+function makeRng(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
 }
 
-function makeCells(levelIdx) {
-  const id = levelIdx + 1;
-  // 共通セル（全レベルで使える）
-  const base = [];
-
-  if (id === 1) {
-    // 四分音符を多めに、休符は少なめ
-    return [
-      { notes:[{t:'q'}] }, { notes:[{t:'q'}] }, { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] }, { notes:[{t:'q'}] }, // 音符を多く
-      { notes:[{t:'r'}] }, // 四分休符（少なめ）
-    ];
-  }
-
-  if (id === 2) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'h'}] },
-      { notes:[{t:'h'}] },
-      { notes:[{t:'r'}] },
-    ];
-  }
-
-  if (id === 3) {
-    // 3/4拍子: 3拍
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] }, // 八分×2=1拍
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'h'}] },
-      { notes:[{t:'r'}] },
-    ];
-  }
-
-  if (id === 4) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'er'},{t:'e'}] }, // 八分休+八分
-      { notes:[{t:'e'},{t:'er'}] }, // 八分+八分休
-      { notes:[{t:'r'}] },
-      { notes:[{t:'h'}] },
-    ];
-  }
-
-  if (id === 5) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'q.'}] },
-      { notes:[{t:'q.'}] },
-      { notes:[{t:'e'}] },
-      { notes:[{t:'er'},{t:'e'}] },
-      { notes:[{t:'h'}] },
-      { notes:[{t:'r'}] },
-    ];
-  }
-
-  if (id === 6) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] }, // 十六分×4=1拍
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'e'}] }, // 十六+十六+八=1拍
-      { notes:[{t:'e'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'r'}] },
-      { notes:[{t:'h'}] },
-    ];
-  }
-
-  if (id === 7) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] }, // 十六休+十六×3
-      { notes:[{t:'s'},{t:'sr'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'sr'},{t:'s'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'sr'}] },
-      { notes:[{t:'sr'},{t:'s'},{t:'e'}] },
-      { notes:[{t:'e'},{t:'sr'},{t:'s'}] },
-      { notes:[{t:'er'},{t:'e'}] },
-      { notes:[{t:'r'}] },
-    ];
-  }
-
-  if (id === 8) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}] }, // 八分三連=1拍
-      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
-      { notes:[{t:'r'}] },
-      { notes:[{t:'h'}] },
-    ];
-  }
-
-  if (id === 9) {
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}] },                           // 三連符 (1拍)
-      { notes:[{t:'p5'},{t:'p5'},{t:'p5'},{t:'p5'},{t:'p5'}] },     // 五連符 (1拍)
-      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'e'}] },
-      { notes:[{t:'e'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'er'},{t:'e'}] },
-      { notes:[{t:'q.'}] },
-      { notes:[{t:'e'}] },
-      { notes:[{t:'r'}] },
-      { notes:[{t:'h'}] },
-    ];
-  }
-
-  if (id === 10) {
-    // 5拍子: より複雑な組み合わせ
-    return [
-      { notes:[{t:'q'}] },
-      { notes:[{t:'q'}] },
-      { notes:[{t:'e'},{t:'e'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'t'},{t:'t'},{t:'t'}] },
-      { notes:[{t:'sr'},{t:'s'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'s'},{t:'s'},{t:'e'}] },
-      { notes:[{t:'e'},{t:'s'},{t:'s'}] },
-      { notes:[{t:'er'},{t:'e'}] },
-      { notes:[{t:'q.'}] },
-      { notes:[{t:'e'}] },
-      { notes:[{t:'r'}] },
-      { notes:[{t:'h'}] },
-    ];
-  }
-
-  return [{ notes:[{t:'q'}] }];
-}
-
-// パターンをキー文字列に変換（苦手保存・重複排除用）
-function patternToKey(pattern) {
-  return pattern.map(n => n.t).join(',');
-}
-
-// 現在のパターン（ランダム生成 or 苦手パターン）
-let currentGeneratedPattern = null;
-
-function getPattern() {
-  if (weakPatternMode && currentWeakPattern) return currentWeakPattern;
-  if (!currentGeneratedPattern) currentGeneratedPattern = generatePattern(currentLevel);
-  return currentGeneratedPattern;
-}
-
-function refreshPattern() {
-  currentGeneratedPattern = generatePattern(currentLevel);
-}
-
-// ============================================================
-// STATE
-// ============================================================
-let currentLevel = 0;
-let bpm = 70;
-let gameTimer = null;
-let listenTimer = null;
-let totalScore = 0;
-let streak = 0;
-let xp = 0;
-let unlockedLevel = parseInt(localStorage.getItem('snare_unlockedLevel') || '1', 10);
-let patternResults = [];
-let audioCtx = null;
-let expectedBeats = [];
-let tapLog = [];
-
-// 苦手パターン
-let weakPatterns = JSON.parse(localStorage.getItem('snare_weakPatterns') || '[]');
-// 苦手パターン練習モード
-let weakPatternMode = false;
-let currentWeakPattern = null;
-let weakPatternIndex = 0;
-
-// セッション管理
-let sessionPhase = 'idle';
-let patternStartAC = 0;
-let patternStartPN = 0;
-let countdownTimer = null;
-let lastInputEventMs = 0;
-
-// ============================================================
-// AUDIO
-// ============================================================
-function getACtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  return audioCtx;
-}
-
-function playSnare(time, vol=1) {
-  const ac = getACtx();
-  const t = time ?? ac.currentTime;
-  // tone layer
-  const osc = ac.createOscillator();
-  const og = ac.createGain();
-  osc.connect(og); og.connect(ac.destination);
-  osc.frequency.setValueAtTime(200, t);
-  osc.frequency.exponentialRampToValueAtTime(60, t+0.1);
-  og.gain.setValueAtTime(vol*0.5, t);
-  og.gain.exponentialRampToValueAtTime(0.001, t+0.12);
-  osc.start(t); osc.stop(t+0.14);
-  // noise layer
-  const len = Math.floor(ac.sampleRate * 0.18);
-  const buf = ac.createBuffer(1, len, ac.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.exp(-i/len*14);
-  const src = ac.createBufferSource(); src.buffer = buf;
-  const hpf = ac.createBiquadFilter(); hpf.type='highpass'; hpf.frequency.value=1800;
-  const ng = ac.createGain();
-  src.connect(hpf); hpf.connect(ng); ng.connect(ac.destination);
-  ng.gain.setValueAtTime(vol*1.1, t);
-  ng.gain.exponentialRampToValueAtTime(0.001, t+0.16);
-  src.start(t); src.stop(t+0.2);
-}
-
-function playClick(time, accent=false) {
-  const ac = getACtx();
-  const t = time ?? ac.currentTime;
-  const osc = ac.createOscillator();
-  const g = ac.createGain();
-  osc.connect(g); g.connect(ac.destination);
-  osc.frequency.value = accent ? 1600 : 1000;
-  g.gain.setValueAtTime(accent ? 0.5 : 0.25, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t+0.03);
-  osc.start(t); osc.stop(t+0.04);
-}
-
-// ============================================================
-// CANVAS RENDERING
-// ============================================================
-// AlphaTex音符名マップ
-// スネアはパーカッション譜でC5（AlphaTex標準スネア位置）
-const ALPHATEX_DUR = {
-  q:   '4',
-  h:   '2',
-  w:   '1',
-  'q.':'4.',
-  e:   '8',
-  er:  'r8',   // 八分休符
-  s:   '16',
-  sr:  'r16',  // 十六分休符
-  r:   'r4',   // 四分休符
-  t:   '8{tu 3}',   // 三連符（八分3連）
-  p5:  '8{tu 5}',   // 五連符
-  p7:  '8{tu 7}',   // 七連符
-  p9:  '8{tu 9}',   // 九連符
-};
-
-
-
-
-// 本物の楽譜から切り取った休符画像（data URI）
-const REST_IMG_SRC = {
-  r:  'data:image/png;base64,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',
-  er: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKUAAACWCAYAAAC/xUjZAAALRklEQVR4nO2d63NVVxnGfycXAuTC/ZJGKlQoVYtYLDrVjo7Wf9lvfnAcdXTa0bEjILReKlAICOROArn44dmva52dvZPQ5ISevZ/fzJ6cJPvss3POk/e23rUWGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcaY/9N53TfQZ3RI79l2791GdphXYOh130AfEYIcyB6XhdkhCXG9OCxKY/odu+/tiffoq1q8QfbGlZfDho3S18Yw8Lpv4GtO2WV/FYaRMHdjAPL7yA9jzH5g972ZsErrFb8bBY4AR4Fx4DBwgG7XugbMAg+Au3S717BwkQSZCpx9b6YqqwYYASaBt4ALwJvACSTOiBsHgBfAF8DHwBwwk11jsDhW2bkodxvT9h0WZTVVojwFXAS+D3y3eHwWmKBblMvAP4prTAN/zK7xklQ22imtEWNgUSZyscTXQeAgMAZ8C/ge8APgMnAOufEyE+h9nQeWgJPAPSTUeWRJg0Gqa5m5tQ6LeqB4vWPF4+fAE+BZxXPzv6HvsCgTeeE7GEGi+iaykNeAK8iNj9dcZwMJ8woS0fvA75GIbpfOHULWs0qUEX9uIPEeR2HDBeAQ8Bi4wWZRRszat1iUIrdMuTAPA28A30FW8tvAN1DCA/rwl1FykycvY0i4k8BK8fObbBZledgyEqz8WqPoH+N8cR8XkPCGgH9v8bfYUvY5dcnNOHLT7yCXPUUSJEiMcWwUX2GztT1fXONfyLLNIsuZ/wMMIbGtZteJ57+NLPUlJPinyMKuvtqf2R9YlIkqUU4g132p+Hqk9PshFHOGsMJilgvbY8jKPQPuAJ8jUa7SLcpImHJRnkIhwAfIhT8EHqE4dfYV/r6+waIUdZZyDGXYUyjBGEQWCvTeddCITbBOspqrxfG8OOcSSnLWUTw4Tbf4Qox5IgSy0O8BV1GocAf4DFndmYp77vvOJIsyUSXKgyhZOVE87pCsW4c0fFgukIc4XyKRjSJLu4aK6jdIVjFeN0QcTBXHhyiWnUQZ/JdIlNNI8PGajWmVsygTVaIM9zyKRAQSwFr2nHKL2kBxbrjwDWQpo6QzgbLnIZIoO3RbyAngXeAnwEcorh0C/gv8BxXnF0kiHiL9s/S9MC3KrQlrmL9PuSijbzJcdid7Dtn3q8ACqivOovrlyhav+zaKI3+OEpwBZBWnkaV8XDo/bxjpa0GCRbkdeXdOmRDkRnYudNcIQ6BPkev9K3ALCauKc6jk9AFwHcWT8dqLKIacq7nPxmBRbs06snIRF+ZWKHeTYalCpOt0d6g/Bf4O/BnFk48qXmscWcUfIyt5ke5sfx4lOlVloL63jjkWZaLqg10hNVUcozvbzhOcvL/xJd1loQ6ycg+B+8h9jyAXnnMV+CnwS+S+D5JEvoLc/wrVVtGibChVH+wiiuMeoAx8ovj5MN1Fc0gijRiznJkPoRLTG8hFH0AjRoeRSH8I/AJZy/yelpEYl0ijR+Uxc4uyoVR9sHMo2/0cudILSERxfggziEw8iujh0g+jeHEJueVRZHlPoIL4OBr1OV96/RDfPLKws0iYVU0cjRGmRSnqyihzqPxyAwnpEKo3RkYemXhYxTVSUT2PKU+idrezSFDjSIxHkPUcKa4Rljeyd5CVfIjGuaeRsBsrSLAog3C70N0YsYC6x4eQy45O89PF1/JcmXyoMG+0OIMEGLHmwew5L5AlnEZ1yIHi/Kni9RZQsfwTNIozXzwvL5g3aiqvRZnIY8MQ1HNkpRaL70dIRe9zNdepK88crPjZCrLCn6EQ4Qly6deR8EEu+wZqf4tmDugumPd1q1oZi1JU9TOCPvS54hhGLjxPcs4gl07x/SopucnjyrCoI9lrLACfAn8A/oLChDU0pHg5u6c55Lpvlu6xUQXzHIuymqoPeRr1Q26gEtEXpERlghQbjpBGcSJrXiyOaOhdQ6K8jQR5qzj3LHLzR0jx6gLVjReNKpjnWJSbqbM6z1GdcQFZrqPISk6i5OccSmhiItkqEuIjFJfeRe453O3L4vuIJd9E7W3XUYZ+AMWbC7SgYJ5jUW6mLhPvoCRjBlnJYAoVuy8Vj2OOTpRy7qN2s9uoB7KOk6i7/X1UegLFkEu0oGCeY1FuTT72Xa5JBvdJVvEBqaNoAwnqEbKsdePdQUyhmMp+tlQc6yiWbcWiWRbl1sSHv50QniBhPkDiyYccl9hZh/hwceSfyQxKdJ7TPXoU99ZIcVqU27OTD38VCfPJDq43iMS3XPp5CD+s8Rpq5JhBomxU2WcrLMqdU15kKu+V3MkErhDjEEpiQJY0RLhC91j2AkqAnpA6zHMaaSXBonwVclce9cf4fifkjcEdugUZ18mbOKZRYvQQCbTqfhopTIvy1ditEPJpFOWk6Rhp+u4SSo7+iURZbnOLe2kkFuXu6ZQO6B5pyV1yOW48jArlJ1CN8nTx+8eohHSTBk8Qq8Oi3D256OrqiRGLlkV5FNU3r6ApEFPFOffQKM9NlOjEfJ5GTRCrw6LcG7Zrtq1bFuYoKrx/iArnp1HBPRYbKBfbGzveneMlivePshXtkBqH30Xj3pBa5ubZTGPHu3Msyv2hvAJHuPMJ0ihOfBbLpGkPZRprHXMsyv0jF2XElTFvJ180awWVi+qm9TYei3L/qHK9UZvM1yNaJg0rlneVsChNzykvdPCSNIqzSMMniNVhUe4fVWI6iIYcY1RoGk2N+BIlO60TJLgk1GvyJavzxGUIJTmn0UjOBuqd/BvwJzRBLJZnaewEsTosyt5SJcpB1J3+FlrcfxIJ7yHa5uS3yH2HKBs7QawOi7J3bLWO+llUm7yEOs47aGjxFpq5mNOKgnmOY8reUbc68DE0B+caspaHkAWcRUlO1XVahUXZW6re35Oo+eI9tKZQ7FK2RHXBvHVYlL2jzlIeRUOLF5HVhNQoPFxxfitcdo5jyt6St7LF41HUqnYqOy9EGUsNtmKCWB0W5f4R0yiGUX0yX8RqCY3ivKB6glirsCj3hw3SPJ7yNAhQkjNHWuav1Tim7C1VMeUCEmYs4RILsz6mftpDq6ylRbn/hCUMNz2NRnDuUt1D2SpBgkXZa6oEdQIV0NdIE8RuoS7zOlG2SpiOKfeWfMHVfFhwDJV/TqI1zWPtycdo14hPURNGuO/WjXfnWJR7Tz5BLJKb46hgfhX4GVphbQAt83ITDS3OkFbNKE8QaxUW5d6S90eWJ4hdRluSXEOWM5Z6ae0EsTocU+49VRPEJtCQ4mUkSEhb21WtftG68e4ci3JvqZogNogSm+MoyQliFKd1lnA7LMreEnFlB3WYH8h+F0mQx7tLWJR7T5XrDWHmMXzs+whp7x2DRbmfxF48Qb6DWGsWRN0JFuXeUyWmMRRX5ssJ3kFLU89XPKe1ggSXhPaKfC5OxIoDKIY8gubhHENdQLG13m/QSM6z7PzWFsxzLMq9IRdlxIkHSFMfLqF5OS/RBqS/Bn6FRnRiSep8b8ZWdwpZlLunvMxfWLhx1GH+IzT14Vxx3jO0odPHpevEjrVgUZpdUl7lIjiFhhU/Qhs2xRZ4g1TvIJaP4rQaJzq7p24uznHgHWQlx7Kfl9cOMiUsyt4Ru0CUE5anVL/vrU5ucuy+d09dYjKL1gX6HZosFsv7fYKSm1hDKI5yrbK1OIbZPXkPZc4ZlNxMklrRQO1q99AS0pCSo7wkZIwxxhhjjNkFTnR6xwCqSZaL4rFveKtHbbbCouwd5a3xgkbvFmaMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGPM147/AQ88D12tkFujAAAAAElFTkSuQmCC',
-  sr: 'data:image/png;base64,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',
-};
-
-// 休符をIMG要素でrestLayerに配置する
-function placeRestImages(beats, getHeadX, lineY, canvasW, canvasH) {
-  const layer = document.getElementById('restLayer');
-  if (!layer) return;
-  layer.innerHTML = '';
-
-  const canvas = document.getElementById('staffCanvas');
-  // canvas論理座標 → CSS表示座標の比率
-  // canvas.width/height はDPR倍されているので offsetWidth/Height を使う
-  const scaleX = canvas.offsetWidth  / canvasW;
-  const scaleY = canvas.offsetHeight / canvasH;
-
-  beats.forEach((b, i) => {
-    if (!b.isRest) return;
-    if (b.type !== 'r' && b.type !== 'er' && b.type !== 'sr') return;
-
-    const src = REST_IMG_SRC[b.type];
-    if (!src) return;
-
-    const hx = getHeadX(i); // canvas論理座標（px）
-
-    // 休符の表示サイズ（論理px）
-    const dispH = b.type === 'sr' ? 32 : 24;
-    const dispW = b.type === 'r'  ? 16 : 12;
-
-    // 休符の縦位置: lineYを中心に上下にオフセット
-    // r: 四分休符 → lineYの少し上から
-    // er/sr: 八分・十六分休符 → lineYの上に配置
-    const offsetY = b.type === 'r'  ? -dispH * 0.85 :
-                    b.type === 'er' ? -dispH * 0.75 :
-                    -dispH * 0.65;
-
-    // CSS座標に変換
-    const cssLeft = (hx - dispW / 2) * scaleX;
-    const cssTop  = (lineY + offsetY) * scaleY;
-    const cssW    = dispW * scaleX;
-    const cssH    = dispH * scaleY;
-
-    const imgEl = document.createElement('img');
-    imgEl.src = src;
-    imgEl.style.cssText = `position:absolute;left:${cssLeft}px;top:${cssTop}px;width:${cssW}px;height:${cssH}px;`;
-    layer.appendChild(imgEl);
-  });
-}
-
-const NOTE_COLORS = { p:'#1a6b3a', g:'#c8920a', e:'#c8a000', l:'#c8a000', m:'#c8390a', _:'#1a1408' };
-
-// パターン配列をAlphaTex文字列に変換
-function buildBeats(pattern) {
-  const beats = [];
-  pattern.forEach((note, i) => {
-    const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
-    const dur = NOTE_DUR[note.t] || 1;
-    beats.push({ dur, isRest, type: note.t, idx: i });
-  });
-  return beats;
-}
-
-// 連続するtを3個ずつ三連符グループにまとめる
-// 連符グループ検出（3・5・6・7・9連符に対応）
-function findTripletGroups(beats) {
-  const groups = [];
-  let i = 0;
-
-  // タイプごとの「1グループのサイズ」を定義
-  // tは必ず3個で1グループ（六連符はt×3+t×3の2グループ）
-  const TUPLET_SIZE = {
-    't':  3,  // 三連符: 必ず3個で1グループ
-    'p5': 5,  // 五連符: 5個で1グループ
-    'p6': 6,  // 六連符: 6個で1グループ
-    'p7': 7,  // 七連符: 7個で1グループ
-    'p9': 9,  // 九連符: 9個で1グループ
-  };
-
-  while (i < beats.length) {
-    const type = beats[i].type;
-    if (!(type in TUPLET_SIZE) || beats[i].isRest) { i++; continue; }
-
-    const groupSize = TUPLET_SIZE[type];
-    const start = i;
-
-    // groupSize個だけ進める
-    let cnt = 0;
-    while (i < beats.length && beats[i].type === type && !beats[i].isRest && cnt < groupSize) {
-      i++; cnt++;
-    }
-
-    if (cnt === groupSize) {
-      // ぴったりgroupSize個 → グループ登録
-      groups.push({ start, end: start + groupSize - 1, count: groupSize, num: groupSize });
-    } else {
-      // 不完全なグループは単独扱いに戻す
-      i = start + 1;
-    }
-  }
-  return groups;
-}
-
-// ビームグループを検出
-function findBeamGroups(beats, tripletGroups) {
-  const tripletStarts = new Set(tripletGroups.map(g => g.start));
-  const tripletAll = new Set(
-    tripletGroups.flatMap(g =>
-      Array.from({length: g.end - g.start + 1}, (_, k) => g.start + k)
-    )
-  );
-  const groups = [];
-  let i = 0;
-  let accumDur = 0; // 累積拍数（拍境界の検出用）
-
-  while (i < beats.length) {
-    const b = beats[i];
-
-    if (b.isRest || b.type === 'q' || b.type === 'h' || b.type === 'w' || b.type === 'q.') {
-      accumDur += b.dur;
-      i++; continue;
-    }
-
-    // 連符タイプ
-    if (b.type === 't' || b.type === 'p5' || b.type === 'p6' || b.type === 'p7' || b.type === 'p9') {
-      if (tripletStarts.has(i)) {
-        const g = tripletGroups.find(g => g.start === i);
-        const noteIdxs = Array.from({length: g.end - g.start + 1}, (_, k) => g.start + k);
-        groups.push({ type: b.type, notes: noteIdxs, beamCount:1, tupletNum: g.num });
-        // 累積拍数を更新
-        for (let k = i; k <= g.end; k++) accumDur += beats[k].dur;
-        i = g.end + 1;
-      } else {
-        accumDur += b.dur;
-        i++;
-      }
-      continue;
-    }
-
-    // e or s: 拍の境界で必ず切る
-    const type = b.type;
-    if (type !== 'e' && type !== 's') { accumDur += b.dur; i++; continue; }
-
-    const noteDur = NOTE_DUR[type] || 0.5;
-    const start   = i;
-    const startAccum = accumDur;
-    // この音符が属する拍の開始（小数点以下を切り捨て）
-    const beatStart = Math.floor(startAccum + 0.0001);
-    const beatEnd   = beatStart + 1; // この拍の終わり
-
-    let groupDur = 0;
-    while (i < beats.length && beats[i].type === type && !beats[i].isRest) {
-      const nextAccum = accumDur + noteDur;
-      if (nextAccum > beatEnd + 0.0001) break; // 拍をまたいだら切る
-      accumDur = nextAccum;
-      groupDur += noteDur;
-      i++;
-    }
-
-    if (i - start >= 2) {
-      groups.push({ type, notes: Array.from({length:i-start},(_,k)=>start+k), beamCount: type==='s'?2:1 });
-    }
-    // 1個だけなら単独フラッグ（追加不要）
-  }
-  return groups;
-}
-
-function drawStaff() {
-  const container = document.getElementById('atContainer');
-  if (!container) return;
-
-  const pattern = getPattern();
-  const lv      = LEVELS[currentLevel];
-  const totalDur = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
-  const secPerBeat = 60 / bpm;
-
-  const W   = container.clientWidth || 360;
-  const H   = 160;
-  const DPR = window.devicePixelRatio || 2;
-
-  // Canvasを作成（既存のcanvasを再利用または新規作成）
-  let canvas = container.querySelector('canvas');
-  if (!canvas) {
-    canvas = document.createElement('canvas');
-    canvas.style.cssText = 'display:block;width:100%;background:white;border-radius:4px;';
-    container.innerHTML = '';
-    container.appendChild(canvas);
-  }
-  canvas.width  = W * DPR;
-  canvas.height = H * DPR;
-  canvas.style.width  = W + 'px';
-  canvas.style.height = H + 'px';
-
-  const c = canvas.getContext('2d');
-  c.scale(DPR, DPR);
-  c.clearRect(0, 0, W, H);
-  c.fillStyle = 'white';
-  c.fillRect(0, 0, W, H);
-
-  // ── レイアウト定数 ──
-  const lineY    = 100;          // スタッフ線Y
-  const noteY    = lineY - 12;   // 音符頭Y（線の上）
-  const stemTopY = noteY - 32;   // 符尾上端
-  const beamY    = stemTopY + 3; // ビームY
-  const bracketY = stemTopY - 14;// 連符括弧Y
-
-  // 音符エリア（クレフ・拍子記号の右から）
-  // 最初の音符に余白を持たせる
-  const clefW  = 48;  // クレフ+拍子記号の幅
-  const areaX  = clefW + 10; // 最初の音符の中心X
-  const areaW  = W - areaX - 16; // 音符エリア幅（右端に少し余白）
-
-  // ── 時間比例でX座標を計算 ──
-  // accumDur（拍数）に比例してX座標を決定
-  function noteX(accumDur) {
-    return areaX + (accumDur / totalDur) * areaW;
-  }
-
-  // ── スタッフ線（一線）──
-  c.strokeStyle = '#1a1408';
-  c.lineWidth   = 1.5;
-  c.beginPath();
-  c.moveTo(10, lineY);
-  c.lineTo(W - 10, lineY);
-  c.stroke();
-
-  // ── パーカッションクレフ（縦2本線）──
-  c.lineWidth = 4;
-  c.beginPath(); c.moveTo(14, lineY-20); c.lineTo(14, lineY+20); c.stroke();
-  c.lineWidth = 1.8;
-  c.beginPath(); c.moveTo(20, lineY-14); c.lineTo(20, lineY+14); c.stroke();
-
-  // ── 拍子記号 ──
-  c.fillStyle  = '#1a1408';
-  c.textAlign  = 'center';
-  c.font = 'bold 18px serif';
-  c.fillText(String(lv.timeSig), 34, lineY - 2);
-  c.fillText('4', 34, lineY + 16);
-
-  // areaXに縦線（音符エリアの開始マーク、デバッグ用・実際は透明）
-  // c.strokeStyle = 'rgba(255,0,0,0.3)'; c.lineWidth=1;
-  // c.beginPath(); c.moveTo(areaX,lineY-20); c.lineTo(areaX,lineY+20); c.stroke();
-
-  // ── 小節線 ──
-  for (let beat = lv.timeSig; beat <= totalDur + 0.001; beat += lv.timeSig) {
-    const bx = noteX(beat);
-    const isLast = beat >= totalDur - 0.001;
-    c.strokeStyle = '#1a1408';
-    c.lineWidth   = isLast ? 2.5 : 1.2;
-    c.beginPath(); c.moveTo(bx, lineY-16); c.lineTo(bx, lineY+16); c.stroke();
-    if (isLast) {
-      c.lineWidth = 1.2;
-      c.beginPath(); c.moveTo(bx+5, lineY-16); c.lineTo(bx+5, lineY+16); c.stroke();
-    }
-  }
-
-  // ── グループ解析 ──
-  const tripletGroups = findTripletGroups(buildBeats(pattern));
-  const beamGroups    = findBeamGroups(buildBeats(pattern), tripletGroups);
-  const beamedSet     = new Set(beamGroups.flatMap(g => g.notes));
-
-  // ── 音符・休符を描く ──
-  let accumDur = 0;
-  window._noteXPositions = [];
-  window._noteTimeMsMap  = [];
-
-  pattern.forEach((note, i) => {
-    const dur    = NOTE_DUR[note.t] || 1;
-    const isRest = NOTE_IS_REST[note.t] || note.t === 'r';
-    const hx     = noteX(accumDur);
-    const res    = patternResults[i];
-    const col    = res ? (NOTE_COLORS[res] || '#1a1408') : '#1a1408';
-
-    // X座標・時刻を記録
-    if (!isRest) {
-      window._noteXPositions[i] = hx;
-      window._noteTimeMsMap[i]  = accumDur * secPerBeat * 1000;
-    }
-
-    if (isRest) {
-      drawRestCanvas(c, note.t, hx, lineY, col);
-    } else {
-      // 音符頭
-      const rx = (note.t === 's' || note.t === 't' ||
-                  note.t === 'p5' || note.t === 'p6' ||
-                  note.t === 'p7' || note.t === 'p9') ? 5 : 6;
-      const filled = (note.t !== 'h' && note.t !== 'w');
-
-      // 音符頭（楕円）
-      c.beginPath();
-      c.ellipse(hx, noteY, rx, rx * 0.72, -0.2, 0, Math.PI * 2);
-      c.fillStyle   = filled ? col : 'white';
-      c.strokeStyle = col;
-      c.lineWidth   = 1.5;
-      c.fill(); c.stroke();
-
-      // 符尾（上向き）
-      if (note.t !== 'w') {
-        const sx = hx + rx;
-        c.strokeStyle = col;
-        c.lineWidth   = 1.8;
-        c.beginPath();
-        c.moveTo(sx, noteY - rx * 0.7);
-        c.lineTo(sx, stemTopY);
-        c.stroke();
-
-        // 単独フラッグ（ビームなし）
-        if (!beamedSet.has(i)) {
-          if (note.t === 'e') drawFlag(c, sx, stemTopY, 1, col);
-          if (note.t === 's') drawFlag(c, sx, stemTopY, 2, col);
-          if (note.t === 't' || note.t === 'p5' || note.t === 'p6' ||
-              note.t === 'p7' || note.t === 'p9') drawFlag(c, sx, stemTopY, 1, col);
+function generatePattern(level, seed) {
+  const cfg = LEVEL_CFG[Math.min(level - 1, 9)];
+  const rng = makeRng(seed);
+  const notes = [];
+  let pos = 0;
+  const total = GRID_TOTAL;
+
+  while (pos < total) {
+    const remaining = total - pos;
+    const beatPos = pos % GRID_BEAT; // position within current beat
+    const beatRemaining = GRID_BEAT - beatPos;
+
+    // Try tuplet?
+    let usedTuplet = false;
+    if (beatPos === 0 && beatRemaining === GRID_BEAT) {
+      for (const [n, prob] of Object.entries(cfg.tupletProbs)) {
+        if (rng() < prob) {
+          const count = parseInt(n);
+          // Tuplet fills exactly 1 beat (315 grid units)
+          const noteDur = Math.floor(GRID_BEAT / count);
+          const isRest = rng() < cfg.restProb;
+          for (let i = 0; i < count; i++) {
+            const d = (i === count - 1) ? (GRID_BEAT - noteDur * (count - 1)) : noteDur;
+            notes.push({ gridStart: pos, gridDur: d, isRest: rng() < cfg.restProb * 0.5, tuplet: count, tupletIdx: i, tupletTotal: count });
+            pos += d;
+          }
+          usedTuplet = true;
+          break;
         }
       }
-
-      // 付点
-      if (note.t.includes('.')) {
-        c.fillStyle = col;
-        c.beginPath();
-        c.arc(hx + rx + 4, noteY - 3, 2.5, 0, Math.PI * 2);
-        c.fill();
-      }
     }
-
-    accumDur += dur;
-  });
-
-  // ── ビームを描く ──
-  beamGroups.forEach(g => {
-    const nx = g.notes;
-    const getStemX = (i) => {
-      const n = pattern[i];
-      const rx = (n && (n.t === 's' || n.t === 't' || n.t === 'p5' ||
-                        n.t === 'p6' || n.t === 'p7' || n.t === 'p9')) ? 5 : 6;
-      let acc = 0;
-      for (let j = 0; j < i; j++) acc += NOTE_DUR[pattern[j].t] || 1;
-      return noteX(acc) + rx;
-    };
-    const x1 = getStemX(nx[0]);
-    const x2 = getStemX(nx[nx.length - 1]);
-
-    const res = patternResults[nx[0]];
-    const col = res ? (NOTE_COLORS[res] || '#1a1408') : '#1a1408';
-
-    c.strokeStyle = col;
-    c.lineWidth   = 4;
-    c.lineCap     = 'square';
-    c.beginPath(); c.moveTo(x1, beamY); c.lineTo(x2, beamY); c.stroke();
-    if (g.beamCount >= 2) {
-      c.beginPath(); c.moveTo(x1, beamY + 5); c.lineTo(x2, beamY + 5); c.stroke();
-    }
-    c.lineCap = 'butt'; c.lineWidth = 1;
-
-    // 連符括弧
-    if (g.type === 't' || g.type === 'p5' || g.type === 'p6' ||
-        g.type === 'p7' || g.type === 'p9') {
-      let acc0 = 0;
-      for (let j = 0; j < nx[0]; j++) acc0 += NOTE_DUR[pattern[j].t] || 1;
-      const bx1 = noteX(acc0);
-      let acc1 = 0;
-      for (let j = 0; j <= nx[nx.length-1]; j++) acc1 += NOTE_DUR[pattern[j].t] || 1;
-      const bx2 = noteX(acc1 - (NOTE_DUR[pattern[nx[nx.length-1]].t] || 1)) + 10;
-      const num = g.tupletNum || (g.type==='t'?3:g.type==='p5'?5:g.type==='p6'?6:g.type==='p7'?7:9);
-      drawTupletBracket(c, bx1, bx2, bracketY, num);
-    }
-  });
-
-  // ── カーソル用座標を記録 ──
-  // noteX(0) = areaX（最初の音符の中心）
-  // noteX(totalDur) = areaX + areaW（最後の音符の右端）
-  window._vfFirstNoteX = areaX;
-  window._vfEndX       = areaX + areaW;
-
-  // SVGスケールは1（CanvasはCSS座標と一致）
-  window._canvasIsNative = true;
-}
-
-function drawFlag(c, x, y, count, col) {
-  c.strokeStyle = col;
-  c.lineWidth   = 1.6;
-  for (let f = 0; f < count; f++) {
-    const fy = y + f * 7;
-    c.beginPath();
-    c.moveTo(x, fy);
-    c.bezierCurveTo(x + 14, fy + 6, x + 14, fy + 12, x + 6, fy + 14);
-    c.stroke();
-  }
-}
-
-function drawTupletBracket(c, x1, x2, y, num) {
-  const mid = (x1 + x2) / 2;
-  c.font = 'bold 12px sans-serif';
-  const gap = c.measureText(String(num)).width / 2 + 3;
-  c.strokeStyle = '#333';
-  c.lineWidth   = 1.2;
-  c.beginPath(); c.moveTo(x1, y+6); c.lineTo(x1, y); c.lineTo(mid-gap, y); c.stroke();
-  c.beginPath(); c.moveTo(mid+gap, y); c.lineTo(x2, y); c.lineTo(x2, y+6); c.stroke();
-  c.fillStyle = '#222';
-  c.textAlign = 'center';
-  c.fillText(String(num), mid, y - 2);
-}
-
-function drawRestCanvas(c, type, x, y, col) {
-  c.fillStyle   = col;
-  c.strokeStyle = col;
-  c.lineCap     = 'round';
-  c.lineJoin    = 'round';
-  c.save();
-  if (type === 'r') {
-    c.translate(x, y - 8);
-    c.lineWidth = 1.8;
-    c.beginPath(); c.moveTo(-4, 0); c.lineTo(3, -6); c.stroke();
-    c.beginPath(); c.moveTo(3, -6); c.lineTo(-3, 2); c.lineTo(4, 8); c.stroke();
-    c.beginPath(); c.arc(2, 10, 2.8, 0, Math.PI*2); c.fill();
-    c.beginPath(); c.moveTo(2, 10); c.bezierCurveTo(-5, 12, -4, 18, 1, 18); c.stroke();
-  } else if (type === 'h' || type === 'hr') {
-    c.fillRect(x-9, y-11, 18, 6);
-  } else if (type === 'w') {
-    c.fillRect(x-9, y-3, 18, 6);
-  } else if (type === 'er') {
-    c.translate(x, y);
-    c.lineWidth = 1.6;
-    c.beginPath(); c.moveTo(-2, 12); c.lineTo(3, -8); c.stroke();
-    c.beginPath(); c.arc(3, -10, 3, 0, Math.PI*2); c.fill();
-    c.lineWidth = 1.5;
-    c.beginPath(); c.moveTo(3,-10); c.bezierCurveTo(10,-6,10,0,3,4); c.stroke();
-  } else if (type === 'sr') {
-    c.translate(x, y);
-    c.lineWidth = 1.6;
-    c.beginPath(); c.moveTo(-2, 14); c.lineTo(3, -12); c.stroke();
-    c.beginPath(); c.arc(3, -14, 3, 0, Math.PI*2); c.fill();
-    c.lineWidth = 1.5;
-    c.beginPath(); c.moveTo(3,-14); c.bezierCurveTo(10,-10,10,-4,3,0); c.stroke();
-    c.beginPath(); c.arc(3, -2, 3, 0, Math.PI*2); c.fill();
-    c.beginPath(); c.moveTo(3,-2); c.bezierCurveTo(10,2,10,8,3,12); c.stroke();
-  }
-  c.restore();
-  c.lineCap = 'butt'; c.lineJoin = 'miter'; c.lineWidth = 1;
-}
-
-
-function makeNote(dur, isRest, VF, StaveNote, dotted) {
-  const sn = new StaveNote({
-    keys:           ['b/4'],
-    duration:       dur,
-    stem_direction:  1,
-    auto_stem:       false,   // VexFlowが自動で符尾方向を変えない
-    clef:           'percussion',
-  });
-  if (dotted && VF.Dot) {
-    VF.Dot.buildAndAttach([sn]);
-  }
-  return sn;
-}
-
-// 手動ビームグループ作成
-// 全音符リストの中でbeamableNotesを1拍ずつに区切ってBeamオブジェクトを生成
-function makeBeamGroups(beamableNotes, allNotes, pattern, timeSig) {
-  if (beamableNotes.length === 0) return [];
-  const VF = Vex.Flow;
-  const beams = [];
-
-  // allNotes内でのbeamableNotesの位置から拍境界を計算
-  // 各音符のpatIdx → 拍位置（何拍目か）
-  const secPerBeat = 60 / bpm;
-  let beatPos = 0; // 累積拍数
-  const noteBeats = {}; // patIdx → 累積拍数
-  pattern.forEach((n, i) => {
-    noteBeats[i] = beatPos;
-    beatPos += NOTE_DUR[n.t] || 1;
-  });
-
-  // beamableNotesを拍単位でグループ化
-  // 同じ整数拍に属する音符をまとめる
-  const groups = {}; // beatIndex → [StaveNote]
-  beamableNotes.forEach(sn => {
-    const bi = Math.floor(noteBeats[sn._patIdx] + 0.001); // 何拍目か（0始まり）
-    if (!groups[bi]) groups[bi] = [];
-    groups[bi].push(sn);
-  });
-
-  // 各グループでBeamを作成（2音符以上あるもの）
-  Object.values(groups).forEach(grp => {
-    if (grp.length >= 2) {
-      try {
-        const beam = new VF.Beam(grp);
-        beams.push(beam);
-      } catch(e) { console.warn('beam error', e); }
-    }
-    // 1音符だけのグループもstem上向きに（単独フラッグ）
-    if (grp.length === 1) {
-      try { grp[0].setStemDirection(1); } catch(e) {}
-    }
-  });
-
-  return beams;
-}
-
-
-// ============================================================
-// TAP VISUAL LINES
-// ============================================================
-const tapLineTimers = [];
-
-// タップ位置の全記録（セッション終了後の残像用）
-let _tapLineData = []; // { relMs, col } セッション中に蓄積
-
-function showTapLine(tapRelMs) {
-  // セッション中はリアルタイムでフラッシュ表示
-  const layer = document.getElementById('tapLineLayer');
-  if (!layer) return;
-  _tapLineData.push({ relMs: tapRelMs });
-  _renderTapLayer();
-
-  // タップ直後に強調フラッシュ
-  const sheetWrap = document.getElementById('sheetWrap');
-  if (!sheetWrap) return;
-  const lineX = tapRelMsToX(tapRelMs);
-  const flash = document.createElement('div');
-  flash.style.cssText = `
-    position:absolute;
-    left:${lineX}px;
-    top:0;bottom:0;
-    width:3px;
-    background:var(--accent);
-    opacity:0.9;
-    pointer-events:none;
-    box-shadow:0 0 8px var(--accent);
-    border-radius:2px;
-    transition:opacity 0.3s;
-  `;
-  layer.appendChild(flash);
-  setTimeout(() => { flash.style.opacity = '0'; setTimeout(() => flash.remove(), 300); }, 400);
-}
-
-// SVGスケール比率を取得（VexFlow内部座標 → CSS表示座標）
-function getSvgScale() {
-  // Canvas描画ではスケール変換不要（CSS座標と一致）
-  if (window._canvasIsNative) return 1;
-  const container = document.getElementById('atContainer');
-  if (!container) return 1;
-  const svg = container.querySelector('svg');
-  if (!svg) return 1;
-  const svgW  = parseFloat(svg.getAttribute('width') || '0');
-  const dispW = svg.getBoundingClientRect().width;
-  return svgW > 0 && dispW > 0 ? dispW / svgW : 1;
-}
-
-// 楽譜上の時刻(ms) → X座標。VexFlowが実際に置いた音符位置を使う。
-// これで「カーソル」「タップ線」「判定用の期待位置」が同じ座標系になる。
-function scoreTimeMsToX(relMs) {
-  const scale = getSvgScale();
-  const xs = window._noteXPositions || [];
-  const ts = window._noteTimeMsMap || [];
-  const pattern = getPattern();
-  const secPerBeat = 60 / bpm;
-  const totalBeats = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 0), 0);
-  const totalMs = totalBeats * secPerBeat * 1000;
-
-  const fallbackStart = (window._vfFirstNoteX !== undefined ? window._vfFirstNoteX : 80) * scale;
-  // fallbackEndはStaveの右端（_vfEndX）をそのまま使う
-  const fallbackEnd   = (window._vfEndX !== undefined ? window._vfEndX : 350) * scale;
-  if (!xs.length || !ts.length) {
-    const pct = Math.max(0, Math.min(1, relMs / Math.max(1, totalMs)));
-    return fallbackStart + pct * (fallbackEnd - fallbackStart);
-  }
-
-  const points = [];
-  for (let i = 0; i < ts.length; i++) {
-    if (Number.isFinite(ts[i]) && Number.isFinite(xs[i])) {
-      points.push({ t: ts[i], x: xs[i] * scale });
-    }
-  }
-  if (!points.length) {
-    const pct = Math.max(0, Math.min(1, relMs / Math.max(1, totalMs)));
-    return fallbackStart + pct * (fallbackEnd - fallbackStart);
-  }
-  points.sort((a, b) => a.t - b.t);
-
-  // 開始前は1音目位置、終了後は終端へ。
-  if (relMs <= points[0].t) return points[0].x;
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i], b = points[i + 1];
-    if (relMs >= a.t && relMs <= b.t && b.t > a.t) {
-      const pct = (relMs - a.t) / (b.t - a.t);
-      return a.x + pct * (b.x - a.x);
-    }
-  }
-  const last = points[points.length - 1];
-  const endX = fallbackEnd;
-  // 最後の音符以降: 全体の平均速度で等速に進む
-  if (points.length >= 2) {
-    const first   = points[0];
-    const pxPerMs = (endX - first.x) / Math.max(1, totalMs - first.t);
-    return Math.min(last.x + pxPerMs * (relMs - last.t), endX);
-  }
-  return endX;
-}
-
-// パターン全体のms → X座標（純粋な時間ベース線形補間）
-// VexFlowのSVG座標をCSS座標に変換してから使う
-function tapRelMsToX(relMs) {
-  // グリッドベースで均等に計算
-  const x0      = window._cursorX0      || 80;
-  const x1      = window._cursorX1      || 350;
-  const totalMs = window._cursorTotalMs || 1;
-  const pct = Math.max(0, Math.min(1, relMs / totalMs));
-  return x0 + pct * (x1 - x0);
-}
-
-// 期待ビート位置 → X座標
-function beatMsToX(beatMs, sheetWrap) {
-  return tapRelMsToX(beatMs, sheetWrap);
-}
-
-// レイヤーを再描画（残像として全タップラインを描く）
-function _renderTapLayer(showExpected) {
-  const layer     = document.getElementById('tapLineLayer');
-  const sheetWrap = document.getElementById('sheetWrap');
-  if (!layer || !sheetWrap) return;
-
-  // フラッシュ要素は残してラインだけ更新
-  [...layer.querySelectorAll('.tap-line-persist')].forEach(e => e.remove());
-
-  // タップ線（赤）
-  _tapLineData.forEach(d => {
-    const x   = tapRelMsToX(d.relMs);
-    const el  = document.createElement('div');
-    el.className = 'tap-line-persist';
-    el.style.cssText = `
-      position:absolute;
-      left:${x - 1}px;
-      top:8px;bottom:8px;
-      width:2px;
-      background:var(--accent);
-      opacity:0.55;
-      pointer-events:none;
-      border-radius:1px;
-    `;
-    layer.appendChild(el);
-  });
-
-  // 期待ビート線（黒点線）
-  if (showExpected && expectedBeats.length > 0) {
-    expectedBeats.forEach(b => {
-      const x  = beatMsToX(b.timeMs);
-      const el = document.createElement('div');
-      el.className = 'tap-line-persist';
-      el.style.cssText = `
-        position:absolute;
-        left:${x}px;
-        top:8px;bottom:8px;
-        width:1px;
-        background:var(--ink);
-        opacity:0.25;
-        pointer-events:none;
-        border-style:dashed;
-      `;
-      layer.appendChild(el);
-    });
-  }
-}
-
-// セッション終了後：残像を確定表示
-function freezeTapLines() {
-  _renderTapLayer(true); // 期待ビート線も一緒に表示
-}
-
-function clearTapLines() {
-  _tapLineData = [];
-  const layer = document.getElementById('tapLineLayer');
-  if (layer) layer.innerHTML = '';
-  tapLineTimers.forEach(t => clearTimeout(t));
-  tapLineTimers.length = 0;
-}
-
-// ============================================================
-// INPUT MODE (TAP / MIC)
-// ============================================================
-let inputMode = 'tap'; // 'tap' | 'mic'
-let micStream = null;
-let micAnalyser = null;
-let micAnimFrame = null;
-let micThreshold = 30;   // delta閾値（低いほど感度高い/3〜300で調整）
-let micCooldownUntil = 0; // 連続検知防止のクールダウン(ms)
-const MIC_COOLDOWN_MS = 150; // 最短打音間隔（残響・二重検知を防ぐ）
-
-function setInputMode(mode) {
-  inputMode = mode;
-  document.getElementById('modeTap').classList.toggle('active', mode === 'tap');
-  document.getElementById('modeMic').classList.toggle('active', mode === 'mic');
-  document.getElementById('tapArea').style.opacity = mode === 'mic' ? '0.35' : '1';
-  document.getElementById('tapArea').style.pointerEvents = mode === 'mic' ? 'none' : '';
-
-  const box = document.getElementById('micInfoBox');
-  if (mode === 'mic') {
-    box.classList.add('show');
-    startMic();
-  } else {
-    box.classList.remove('show');
-    stopMic();
-  }
-}
-
-async function startMic() {
-  try {
-    // iOSでは既存のStreamがあれば再利用（切断防止）
-    if (micStream && micStream.active) {
-      // 既に起動中 → analyserだけ再接続
-      if (!micAnalyser) {
-        const ac = getACtx();
-        const source = ac.createMediaStreamSource(micStream);
-        micAnalyser = ac.createAnalyser();
-        micAnalyser.fftSize = 512;
-        micAnalyser.smoothingTimeConstant = 0.0;
-        source.connect(micAnalyser);
-      }
-      monitorMic();
-      return;
-    }
-    micStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      video: false
-    });
-    const ac = getACtx();
-    // iOSではAudioContextをrunning状態に保つ
-    if (ac.state === 'suspended') await ac.resume();
-    const source = ac.createMediaStreamSource(micStream);
-    micAnalyser = ac.createAnalyser();
-    micAnalyser.fftSize = 512;
-    micAnalyser.smoothingTimeConstant = 0.0;
-    source.connect(micAnalyser);
-    // iOSではstreamが切れないよう、ダミーノードに接続して保持
-    const dummy = ac.createGain();
-    dummy.gain.value = 0;
-    micAnalyser.connect(dummy);
-    dummy.connect(ac.destination);
-    document.getElementById('micDot').classList.add('on');
-    document.getElementById('micStateLabel').textContent = 'マイク ON';
-    monitorMic();
-  } catch(e) {
-    alert('マイクのアクセスが許可されていません:\n' + e.message);
-    setInputMode('tap');
-  }
-}
-
-function stopMic() {
-  // TAPモードに戻ってもstreamは切らない（iOSで再許可が必要になるため）
-  if (micAnimFrame) { cancelAnimationFrame(micAnimFrame); micAnimFrame = null; }
-  const dot = document.getElementById('micDot');
-  const lbl = document.getElementById('micStateLabel');
-  if (dot) { dot.classList.remove('on','hit'); }
-  if (lbl) { lbl.textContent = 'マイク OFF'; }
-  const fill = document.getElementById('micBarFill');
-  if (fill) fill.style.width = '0%';
-}
-
-function monitorMic() {
-  if (!micAnalyser) return;
-  const buf = new Uint8Array(micAnalyser.frequencyBinCount);
-
-  // ★ アタック検知用: 前フレームのピーク音量を保持
-  let prevPeak = 0;
-  // 直近の音量履歴（背景ノイズレベル推定用）
-  const peakHistory = new Array(20).fill(0);
-  let histIdx = 0;
-
-  function tick() {
-    micAnimFrame = requestAnimationFrame(tick);
-    micAnalyser.getByteFrequencyData(buf);
-
-    // 全帯域のピーク音量を計算
-    let peak = 0;
-    for (let i = 0; i < buf.length; i++) peak = Math.max(peak, buf[i]);
-
-    // 背景ノイズレベル（直近20フレームの平均）
-    peakHistory[histIdx % peakHistory.length] = peak;
-    histIdx++;
-    const bgLevel = peakHistory.reduce((a, b) => a + b, 0) / peakHistory.length;
-
-    // ★ アタック = 前フレームからの急激な上昇量
-    const delta = peak - prevPeak;
-    prevPeak = peak;
-
-    // メーターバー・ステータス更新
-    const hitDetected = delta >= micThreshold && peak > bgLevel + 10;
-    const barFill  = document.getElementById('micBarFill');
-    const dot      = document.getElementById('micDot');
-    const hitLabel = document.getElementById('micHitLabel');
-    if (barFill) {
-      const pct = Math.min(100, Math.max(0, delta / Math.max(micThreshold, 1) * 60));
-      barFill.style.width = pct + '%';
-    }
-    if (dot) {
-      dot.classList.toggle('hit', hitDetected);
-      dot.classList.toggle('on',  !hitDetected);
-    }
-    if (hitLabel) {
-      hitLabel.classList.toggle('show', hitDetected);
-    }
-
-    // ★ 打音判定:
-    //   1. 前フレームからの音量上昇(delta)が閾値以上
-    //   2. 現在音量が背景ノイズより十分高い
-    //   3. クールダウン中でない
-    if (sessionPhase === 'playing') {
-      const now = performance.now();
-      if (hitDetected && now > micCooldownUntil) {
-        micCooldownUntil = now + MIC_COOLDOWN_MS;
-        onHit();
-      }
-    }
-  }
-  tick();
-}
-
-// ============================================================
-// GAME LOGIC
-// ============================================================
-function setBpm(v) {
-  bpm = v;
-  document.getElementById('bpmNum').textContent = v;
-  document.getElementById('bpmChip').textContent = `♩= ${v}`;
-}
-
-function buildExpectedBeats() {
-  const pattern    = getPattern();
-  const secPerBeat = 60 / bpm;
-  let timeSec = 0; // パターン開始からの経過秒
-  const beats = [];
-  pattern.forEach((note, i) => {
-    const isRest = !!NOTE_IS_REST[note.t] || note.t === 'r';
-    const dur    = NOTE_DUR[note.t] || 1; // 拍数
-    // timeMs = パターン開始からの経過ms（秒に変換してからms）
-    // dur拍 × secPerBeat秒/拍 = 経過秒
-    if (!isRest) beats.push({ timeSec, timeMs: timeSec * 1000, idx: i, dur });
-    timeSec += dur * secPerBeat; // 次の音符の開始時刻（秒）
-  });
-  return beats;
-}
-
-
-function startSession() {
-  if (sessionPhase === 'playing' || sessionPhase === 'countdown') {
-    stopSession();
-    return;
-  }
-  getACtx();
-  _beginPlayCalled = false;
-  patternResults = [];
-  tapLog = [];
-  clearTapLines();
-  document.getElementById('dotsRow').innerHTML = '';
-  document.getElementById('resultCard').style.display = 'none';
-  document.getElementById('startBtn').textContent = '⏹ 停止';
-  sessionPhase = 'countdown';
-
-  const ac = getACtx();
-  const secPerBeat = 60 / bpm;
-
-  // ac と performance.now を同時取得
-  const acBase = ac.currentTime;
-  const pnBase = performance.now();
-  function acToPn(acT) { return pnBase + (acT - acBase) * 1000; }
-
-  // インカウント: 1・2・3・4
-  const countBeats = 4;
-  const countStartAC = acBase + 0.08;
-  for (let i = 0; i < countBeats; i++) {
-    playClick(countStartAC + i * secPerBeat, i === 0);
-  }
-
-  // patternStartAC = 4拍目の次の頭
-  patternStartAC = countStartAC + countBeats * secPerBeat;
-  patternStartPN = acToPn(patternStartAC);
-
-  // ★ メトロノームもここでスケジュール（beginPlayのsetTimeout遅延に依存しない）
-  const lv0 = LEVELS[currentLevel];
-  const pattern0 = getPattern();
-  const totalDurBeats0 = pattern0.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
-  for (let b = 0; b < Math.ceil(totalDurBeats0); b++) {
-    playClick(patternStartAC + b * secPerBeat, b % lv0.timeSig === 0);
-  }
-
-  // UI数字表示
-  for (let i = 0; i < countBeats; i++) {
-    const delayMs = acToPn(countStartAC + i * secPerBeat) - pnBase;
-    setTimeout(() => {
-      if (sessionPhase === 'idle') return;
-      document.getElementById('feedbackMain').textContent = i + 1;
-      document.getElementById('feedbackMain').className = 'feedback-main ready';
-      document.getElementById('feedbackSub').textContent = 'インカウント';
-    }, delayMs);
-  }
-
-  // 3拍目でplayingに移行してタップ受付開始（1拍目を確実に受け付けるため）
-  const beat3PN = acToPn(countStartAC + 2 * secPerBeat); // 3拍目のPN時刻
-  setTimeout(() => {
-    if (sessionPhase === 'idle') return;
-    sessionPhase = 'playing';
-    expectedBeats = buildExpectedBeats();
-  }, Math.max(0, beat3PN - pnBase));
-
-  // パターン頭でbeginPlay
-  const beginDelay = patternStartPN - pnBase - 30; // 30ms早めに呼ぶ
-  setTimeout(() => {
-    if (sessionPhase === 'idle') return;
-    beginPlay();
-  }, Math.max(0, beginDelay));
-}
-
-let _beginPlayCalled = false; // 多重呼び出し防止
-function beginPlay() {
-  if (_beginPlayCalled) return;
-  _beginPlayCalled = true;
-  document.getElementById('feedbackMain').textContent = 'TAP!';
-  document.getElementById('feedbackMain').className = 'feedback-main ready';
-  document.getElementById('feedbackSub').textContent = '';
-  const pattern = getPattern();
-  const lv = LEVELS[currentLevel];
-  const ac = getACtx();
-  const secPerBeat = 60 / bpm;
-  const totalDurBeats = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
-  const totalMs = totalDurBeats * secPerBeat * 1000;
-
-  // ★ バーアニメーション
-  const cursorEl = document.getElementById('cursorLine');
-
-  // グリッドベースのX座標マップを構築
-  // 1拍を64分割した均等グリッドで時刻→X座標を対応付け
-  const _svgScale = getSvgScale();
-  const _firstX = (window._vfFirstNoteX || 80) * _svgScale;
-  const _endX   = (window._vfEndX || 350) * _svgScale;
-  const GRID = 1260; // 1拍あたりのグリッド数（3×4×5×6×7×9の最小公倍数：全連符が完全に割り切れる）
-  const lv0  = LEVELS[currentLevel];
-  const totalGrids = lv0.timeSig * GRID; // 全グリッド数
-  const msPerGrid  = totalMs / totalGrids;
-  const pxPerGrid  = (_endX - _firstX) / totalGrids;
-
-  // 時刻ms → CSS X座標（均等グリッド）
-  function timeToCursorX(ms) {
-    const gridIdx = ms / msPerGrid;
-    return _firstX + gridIdx * pxPerGrid;
-  }
-
-  window._cursorX0      = _firstX;
-  window._cursorX1      = _endX;
-  window._cursorTotalMs = totalMs;
-  window._cursorGrid    = { msPerGrid, pxPerGrid, firstX: _firstX };
-
-  // ACとPNを同時取得してpatternStartACと正確に対応付ける
-  const acNow       = ac.currentTime;
-  const pnNow       = performance.now();
-  const animStartPN = pnNow + (patternStartAC - acNow) * 1000;
-
-  cursorEl.style.display = 'block';
-  cursorEl.style.left    = _firstX + 'px';
-
-  function animCursor() {
-    if (sessionPhase !== 'playing') return;
-    const elapsedMs = performance.now() - animStartPN;
-    if (elapsedMs < 0) { requestAnimationFrame(animCursor); return; }
-    cursorEl.style.left = timeToCursorX(Math.min(totalMs, elapsedMs)) + 'px';
-    if (elapsedMs < totalMs) {
-      requestAnimationFrame(animCursor);
+    if (usedTuplet) continue;
+
+    // Pick a note duration that fits
+    const candidates = cfg.notes.filter(n => DUR[n] <= remaining && DUR[n] <= beatRemaining);
+    let candidate;
+    if (candidates.length === 0) {
+      // Fill with shortest available
+      candidate = 'sixteenth';
     } else {
-      cursorEl.style.display = 'none';
-      setTimeout(evalSession, 200);
+      candidate = candidates[Math.floor(rng() * candidates.length)];
+    }
+
+    const dur = Math.min(DUR[candidate], remaining);
+    const isRest = rng() < cfg.restProb;
+    notes.push({ gridStart: pos, gridDur: dur, isRest, tuplet: null, noteType: candidate });
+    pos += dur;
+  }
+
+  return notes;
+}
+
+// ═══════════════════════════════════════════════════════
+// CANVAS DRAWING
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('scoreCanvas');
+const ctx = canvas.getContext('2d');
+
+function setupCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth || window.innerWidth;
+  canvas.width = w * dpr;
+  canvas.height = CANVAS_H * dpr;
+  canvas.style.height = CANVAS_H + 'px';
+  ctx.scale(dpr, dpr);
+  return w;
+}
+
+function drawScore(cursorRatio) {
+  const w = canvas.offsetWidth || window.innerWidth;
+  const h = CANVAS_H;
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = '#0d0d16';
+  ctx.fillRect(0, 0, w, h);
+
+  const marginL = 28;
+  const marginR = 12;
+  const staffW = w - marginL - marginR;
+  const staffY = 62; // y of the single staff line
+  const noteR = 7; // note head radius
+  const stemH = 36;
+
+  // Clef (percussion bracket)
+  ctx.strokeStyle = '#556';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(marginL - 10, staffY - 12);
+  ctx.lineTo(marginL - 10, staffY + 12);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(marginL - 10, staffY - 12);
+  ctx.lineTo(marginL - 4, staffY - 12);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(marginL - 10, staffY + 12);
+  ctx.lineTo(marginL - 4, staffY + 12);
+  ctx.stroke();
+
+  // Time signature
+  ctx.fillStyle = '#8888aa';
+  ctx.font = 'bold 20px serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('4', marginL + 6, staffY - 2);
+  ctx.fillText('4', marginL + 6, staffY + 14);
+
+  const scoreLeft = marginL + 18;
+  const scoreW = staffW - 18;
+
+  // Staff line(s)
+  ctx.strokeStyle = '#3a3a5a';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(scoreLeft, staffY);
+  ctx.lineTo(scoreLeft + scoreW, staffY);
+  ctx.stroke();
+
+  // Bar lines & measure markers
+  for (let m = 0; m <= MEASURES; m++) {
+    const x = scoreLeft + (m / MEASURES) * scoreW;
+    ctx.strokeStyle = m === 0 || m === MEASURES ? '#7777aa' : '#444466';
+    ctx.lineWidth = m === 0 || m === MEASURES ? 1.8 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, staffY - 14);
+    ctx.lineTo(x, staffY + 14);
+    ctx.stroke();
+  }
+
+  // Beat subdivisions (faint)
+  for (let b = 1; b < TOTAL_BEATS; b++) {
+    if (b % 4 === 0) continue; // skip bar lines
+    const x = scoreLeft + (b / TOTAL_BEATS) * scoreW;
+    ctx.strokeStyle = '#222233';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x, staffY - 10);
+    ctx.lineTo(x, staffY + 10);
+    ctx.stroke();
+  }
+
+  // ── Draw notes ──
+  // First pass: group beamed notes (eighth/sixteenth within same beat)
+  const beamGroups = []; // [{notes: [...], beat}]
+  let beatNotes = {};
+  for (const note of patternNotes) {
+    if (note.isRest || note.tuplet) continue;
+    const beatNum = Math.floor(note.gridStart / GRID_BEAT);
+    if (note.gridDur <= DUR.eighth) {
+      if (!beatNotes[beatNum]) beatNotes[beatNum] = [];
+      beatNotes[beatNum].push(note);
     }
   }
-  requestAnimationFrame(animCursor);
 
-  // フォールバック終了タイマー
-  gameTimer = setTimeout(() => {
-    if (sessionPhase === 'playing') evalSession();
-  }, totalMs + 800);
+  function noteX(gridStart) {
+    return scoreLeft + (gridStart / GRID_TOTAL) * scoreW;
+  }
+
+  // Draw beam groups first
+  for (const [beat, grp] of Object.entries(beatNotes)) {
+    if (grp.length < 2) continue;
+    // Draw beam
+    const x1 = noteX(grp[0].gridStart);
+    const x2 = noteX(grp[grp.length - 1].gridStart);
+    const beamY = staffY - stemH - 2;
+    ctx.strokeStyle = '#aaaacc';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, beamY);
+    ctx.lineTo(x2, beamY);
+    ctx.stroke();
+
+    // 16th beam
+    const sixteenths = grp.filter(n => n.gridDur <= DUR.sixteenth + 5);
+    if (sixteenths.length >= 2) {
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#aaaacc';
+      // group consecutive 16ths
+      let i = 0;
+      while (i < sixteenths.length) {
+        let j = i;
+        while (j + 1 < sixteenths.length) j++;
+        if (j > i) {
+          ctx.beginPath();
+          ctx.moveTo(noteX(sixteenths[i].gridStart), beamY + 5);
+          ctx.lineTo(noteX(sixteenths[j].gridStart), beamY + 5);
+          ctx.stroke();
+        }
+        i = j + 1;
+      }
+    }
+  }
+
+  // Draw each note
+  for (const note of patternNotes) {
+    const x = noteX(note.gridStart);
+    const jIdx = patternNotes.indexOf(note);
+    const jud = judgments[jIdx];
+    let color = '#aaaacc';
+    if (jud) {
+      if (jud.type === 'perfect') color = '#00e676';
+      else if (jud.type === 'good') color = '#ffd600';
+      else color = '#ff3b5c';
+    }
+
+    if (note.isRest) {
+      drawRest(x, staffY, note.gridDur, color);
+    } else {
+      drawNote(x, staffY, note.gridDur, color, beatNotes, note);
+    }
+
+    // Tuplet bracket
+    if (note.tuplet && note.tupletIdx === 0) {
+      drawTuplet(note, patternNotes, noteX, staffY, stemH);
+    }
+  }
+
+  // Tap marks
+  for (const tm of tapMarks) {
+    const x = scoreLeft + tm.xRatio * scoreW;
+    ctx.strokeStyle = 'rgba(255,59,92,0.6)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x, staffY - 18);
+    ctx.lineTo(x, staffY + 18);
+    ctx.stroke();
+  }
+
+  // Cursor
+  if (cursorRatio !== undefined && cursorRatio >= 0 && cursorRatio <= 1) {
+    const cx = scoreLeft + cursorRatio * scoreW;
+    ctx.strokeStyle = '#ff3b5c';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#ff3b5c';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(cx, staffY - 22);
+    ctx.lineTo(cx, staffY + 22);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawNote(x, staffY, gridDur, color, beatNotes, note) {
+  const noteR = 7;
+  const stemH = 36;
+  const beatNum = Math.floor(note.gridStart / GRID_BEAT);
+  const inGroup = beatNotes[beatNum] && beatNotes[beatNum].length >= 2;
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+
+  // Note head (X shape for percussion)
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x - 5, staffY - 5); ctx.lineTo(x + 5, staffY + 5);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + 5, staffY - 5); ctx.lineTo(x - 5, staffY + 5);
+  ctx.stroke();
+
+  // Stem (up)
+  const stemTop = staffY - stemH;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x + 5, staffY - 2);
+  ctx.lineTo(x + 5, stemTop);
+  ctx.stroke();
+
+  // Flag (only if not in beam group and short note)
+  if (!inGroup) {
+    if (gridDur <= DUR.sixteenth + 5) {
+      // two flags
+      drawFlag(x + 5, stemTop, color);
+      drawFlag(x + 5, stemTop + 8, color);
+    } else if (gridDur <= DUR.eighth + 5) {
+      drawFlag(x + 5, stemTop, color);
+    }
+  }
+
+  // Dot for dotted notes
+  if (gridDur === DUR.dottedQuarter || gridDur === DUR.dottedEighth || gridDur === DUR.dottedHalf) {
+    ctx.beginPath();
+    ctx.arc(x + 12, staffY - 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Whole/half note: open head
+  if (gridDur >= DUR.half) {
+    ctx.clearRect(x - 4, staffY - 4, 8, 8);
+    ctx.lineWidth = 2.5;
+    // Re-draw X open
+    ctx.beginPath();
+    ctx.moveTo(x - 5, staffY - 5); ctx.lineTo(x + 5, staffY + 5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 5, staffY - 5); ctx.lineTo(x - 5, staffY + 5);
+    ctx.stroke();
+  }
+}
+
+function drawFlag(sx, sy, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.bezierCurveTo(sx + 14, sy + 6, sx + 14, sy + 14, sx, sy + 18);
+  ctx.stroke();
+}
+
+function drawRest(x, staffY, gridDur, color) {
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  if (gridDur >= DUR.quarter - 5) {
+    // Quarter rest: zigzag
+    ctx.beginPath();
+    ctx.moveTo(x - 3, staffY - 10);
+    ctx.lineTo(x + 4, staffY - 4);
+    ctx.lineTo(x - 3, staffY + 0);
+    ctx.lineTo(x + 2, staffY + 5);
+    ctx.lineTo(x - 3, staffY + 10);
+    ctx.stroke();
+  } else if (gridDur >= DUR.eighth - 5) {
+    // Eighth rest
+    ctx.beginPath();
+    ctx.arc(x, staffY + 4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 3, staffY + 4);
+    ctx.lineTo(x - 4, staffY - 8);
+    ctx.stroke();
+  } else {
+    // Sixteenth rest
+    ctx.beginPath();
+    ctx.arc(x, staffY + 4, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, staffY - 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 3, staffY + 4);
+    ctx.lineTo(x - 2, staffY - 10);
+    ctx.stroke();
+  }
+}
+
+function drawTuplet(firstNote, allNotes, noteX, staffY, stemH) {
+  const count = firstNote.tuplet;
+  const groupNotes = allNotes.filter(n => n.tuplet === count && n.gridStart >= firstNote.gridStart && n.gridStart < firstNote.gridStart + GRID_BEAT);
+  if (groupNotes.length < 2) return;
+  const x1 = noteX(groupNotes[0].gridStart);
+  const x2 = noteX(groupNotes[groupNotes.length - 1].gridStart);
+  const y = staffY - stemH - 14;
+  ctx.strokeStyle = '#8888aa';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x1 - 4, y + 5);
+  ctx.lineTo(x1 - 4, y);
+  ctx.lineTo(x2 + 4, y);
+  ctx.lineTo(x2 + 4, y + 5);
+  ctx.stroke();
+  ctx.fillStyle = '#aaaacc';
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(count, (x1 + x2) / 2, y - 2);
+}
+
+// ═══════════════════════════════════════════════════════
+// SESSION CONTROL
+// ═══════════════════════════════════════════════════════
+function startSession() {
+  getAC();
+  stopSession();
+  const seed = currentPatternSeed || Date.now();
+  currentPatternSeed = seed;
+  patternNotes = generatePattern(currentLevel, seed);
+  taps = [];
+  judgments = new Array(patternNotes.length).fill(null);
+  tapMarks = [];
+  sessionPhase = 'counting';
+  countInBeat = 0;
+
+  beatInterval = 60 / bpm;
+  const now = ac.currentTime + 0.1;
+
+  // Schedule count-in (4 beats) + metronome during playing
+  const totalBeats = BEATS_PER_MEASURE + TOTAL_BEATS; // 4 count-in + 8 playing
+  for (let i = 0; i < totalBeats; i++) {
+    const t = now + i * beatInterval;
+    synthClick(t, i % 4 === 0);
+  }
+
+  // Schedule snare preview? No – user taps.
+  // Record pattern start time
+  const patternStartACTime = now + BEATS_PER_MEASURE * beatInterval; // after count-in
+
+  // Update phase display on count-in beats
+  for (let i = 0; i < BEATS_PER_MEASURE; i++) {
+    const delay = (now + i * beatInterval - ac.currentTime) * 1000;
+    setTimeout(() => {
+      countInBeat = i + 1;
+      updateBeatDots(countInBeat - 1);
+      updatePhaseDisplay('counting', `COUNT ${countInBeat}`);
+    }, delay);
+  }
+
+  // On 3rd beat of count-in: set playing phase (so 1st beat tap registers)
+  const playPhaseDelay = (now + (BEATS_PER_MEASURE - 1) * beatInterval - ac.currentTime) * 1000;
+  setTimeout(() => {
+    sessionPhase = 'playing';
+    updatePhaseDisplay('playing', 'PLAY!');
+    document.getElementById('tapBtn').disabled = false;
+    document.getElementById('startBtn').style.display = 'none';
+
+    // Record animStartPN + patternStartAC for cursor
+    patternStartAC = patternStartACTime;
+    // Calculate animStartPN: when pattern starts in performance.now
+    animStartPN = performance.now() + (patternStartACTime - ac.currentTime) * 1000;
+
+    startCursorAnim();
+    if (micMode) startMicListening();
+  }, playPhaseDelay);
+
+  // End of pattern
+  const endDelay = (now + totalBeats * beatInterval - ac.currentTime) * 1000;
+  setTimeout(() => {
+    endSession();
+  }, endDelay + 300);
+
+  updatePhaseDisplay('', '– COUNT IN –');
+  document.getElementById('tapBtn').disabled = true;
 }
 
 function stopSession() {
   sessionPhase = 'idle';
-  _beginPlayCalled = false;
-  clearTimeout(countdownTimer);
-  clearTimeout(gameTimer);
-  document.getElementById('cursorLine').style.display = 'none';
-  document.getElementById('startBtn').textContent = '▶ スタート';
-  document.getElementById('feedbackMain').textContent = '停止しました';
-  document.getElementById('feedbackMain').className = 'feedback-main ready';
-  // マイクはモードが変わるまで継続（停止しない）
+  cancelAnimationFrame(animFrameId);
+  clearInterval(micCheckInterval);
+  if (analyserNode) { analyserNode.disconnect(); analyserNode = null; }
+  document.getElementById('tapBtn').disabled = true;
+  document.getElementById('startBtn').style.display = '';
+  updateBeatDots(-1);
+  updatePhaseDisplay('', '– READY –');
 }
 
-function onTap(e) {
+function endSession() {
+  sessionPhase = 'done';
+  cancelAnimationFrame(animFrameId);
+  clearInterval(micCheckInterval);
+  // Check unmatched notes as MISS
+  for (let i = 0; i < patternNotes.length; i++) {
+    if (!patternNotes[i].isRest && judgments[i] === null) {
+      judgments[i] = { type: 'miss', delta: 999 };
+    }
+  }
+  drawScore(null);
+  showResult();
+}
+
+function replaySession() {
+  showScreen('playScreen');
+  startSession();
+}
+
+function newPattern() {
+  currentPatternSeed = Date.now();
+  showScreen('playScreen');
+  stopSession();
+  drawScore(undefined);
+}
+
+// ═══════════════════════════════════════════════════════
+// CURSOR ANIMATION
+// ═══════════════════════════════════════════════════════
+function startCursorAnim() {
+  function frame() {
+    if (sessionPhase !== 'playing') return;
+    const elapsed = performance.now() - animStartPN; // ms
+    const totalMs = TOTAL_BEATS * beatInterval * 1000;
+    const ratio = Math.max(0, Math.min(1, elapsed / totalMs));
+    drawScore(ratio);
+    if (ratio < 1) animFrameId = requestAnimationFrame(frame);
+  }
+  animFrameId = requestAnimationFrame(frame);
+}
+
+// ═══════════════════════════════════════════════════════
+// TAP HANDLING & JUDGMENT
+// ═══════════════════════════════════════════════════════
+function handleTap(e) {
   e.preventDefault();
-  // touchstart後にmousedownが続けて発火する端末で二重入力になるのを防ぐ
-  const nowEvt = performance.now();
-  if (nowEvt - lastInputEventMs < 80) return;
-  lastInputEventMs = nowEvt;
   if (sessionPhase !== 'playing') return;
-  if (inputMode === 'mic') return; // micモード中はタップ無効
+  const tapAC = ac.currentTime;
+  const tapMs = (tapAC - patternStartAC) * 1000;
+  taps.push(tapMs);
+  judgeLastTap(tapMs);
+  flashTapBtn();
 
-  // タップビジュアル
-  const btn = document.getElementById('tapArea');
-  btn.classList.add('hit');
-  setTimeout(() => btn.classList.remove('hit'), 80);
-  const ripple = document.createElement('div');
-  ripple.className = 'tap-ripple';
-  ripple.style.cssText = 'width:80px;height:80px;left:50%;top:50%;margin-left:-40px;margin-top:-40px;position:absolute;';
-  btn.appendChild(ripple);
-  setTimeout(() => ripple.remove(), 500);
-
-  onHit();
+  // tap mark on canvas
+  const totalMs = TOTAL_BEATS * beatInterval * 1000;
+  tapMarks.push({ xRatio: Math.max(0, Math.min(1, tapMs / totalMs)) });
 }
 
-// タップ・マイク共通の判定処理
-function onHit() {
-  if (sessionPhase !== 'playing') return;
+function judgeLastTap(tapMs) {
+  // Find nearest unmatched, non-rest note
+  let bestIdx = -1;
+  let bestDelta = Infinity;
+  const totalMs = TOTAL_BEATS * beatInterval * 1000;
 
-  // ★ AudioCtx基準でタップ時刻を記録
-  // patternStartAC より前の打音（1拍目直前の早打ち）も拾えるよう
-  // clampせずそのままの値を使う
-  const ac = getACtx();
-  const tapRelMs = (ac.currentTime - patternStartAC) * 1000;
-
-  playSnare();
-  tapLog.push(tapRelMs);
-  showTapLine(tapRelMs);  // タップ位置を赤線で表示
-
-  // 判定ウィンドウ
-  const PERFECT_EARLY = 80,  PERFECT_LATE = 100;   // PERFECT判定
-  const GOOD_EARLY    = 250, GOOD_LATE    = 200;   // 前方向を広めに
-
-  let bestDiff = 999999, bestB = null;
-  expectedBeats.forEach(b => {
-    const diff = tapRelMs - b.timeMs;
-    // 判定ウィンドウ内かどうか
-    if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
-      const absDiff = Math.abs(diff);
-      if (absDiff < Math.abs(bestDiff)) { bestDiff = diff; bestB = b; }
-    }
-  });
-
-  if (!bestB) {
-    // ウィンドウ外 = MISS（フィードバックはしない：どの音符にも対応しない打音）
-    return;
+  for (let i = 0; i < patternNotes.length; i++) {
+    const note = patternNotes[i];
+    if (note.isRest) continue;
+    if (judgments[i] !== null) continue;
+    const noteMs = (note.gridStart / GRID_TOTAL) * totalMs;
+    const delta = Math.abs(tapMs - noteMs);
+    if (delta < bestDelta) { bestDelta = delta; bestIdx = i; }
   }
-  if (bestDiff >= -PERFECT_EARLY && bestDiff <= PERFECT_LATE) {
-    showFeedback('PERFECT!', 'perfect', '');
+
+  if (bestIdx === -1) return;
+  const note = patternNotes[bestIdx];
+  const noteMs = (note.gridStart / GRID_TOTAL) * totalMs;
+  const delta = tapMs - noteMs;
+  let type;
+  if (Math.abs(delta) <= PERFECT_MS) type = 'perfect';
+  else if (Math.abs(delta) <= GOOD_MS) type = 'good';
+  else type = 'miss';
+
+  // Only match if within 2x GOOD window
+  if (Math.abs(delta) > GOOD_MS * 2) return;
+
+  judgments[bestIdx] = { type, delta };
+  showJudge(type);
+}
+
+function showJudge(type) {
+  const el = document.getElementById('judgePop');
+  el.className = '';
+  el.textContent = type === 'perfect' ? 'PERFECT' : type === 'good' ? 'GOOD' : 'MISS';
+  el.classList.add('show', type);
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.classList.remove('show'); }, 500);
+}
+
+function flashTapBtn() {
+  const btn = document.getElementById('tapBtn');
+  btn.classList.add('flash');
+  setTimeout(() => btn.classList.remove('flash'), 80);
+}
+
+// ═══════════════════════════════════════════════════════
+// MIC MODE
+// ═══════════════════════════════════════════════════════
+async function toggleMic() {
+  if (!micMode) {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micMode = true;
+      document.getElementById('micToggle').textContent = '🎙 MIC ON';
+      document.getElementById('micToggle').classList.add('on');
+      showToast('MICモード ON');
+    } catch (e) {
+      showToast('マイクの使用が拒否されました');
+    }
   } else {
-    showFeedback(bestDiff < 0 ? 'EARLY' : 'LATE', bestDiff < 0 ? 'early' : 'late', '');
+    micMode = false;
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    document.getElementById('micToggle').textContent = '🎙 MIC OFF';
+    document.getElementById('micToggle').classList.remove('on');
+    showToast('MICモード OFF');
   }
 }
 
-function evalSession() {
-  sessionPhase = 'result';
-  document.getElementById('cursorLine').style.display = 'none';
-  document.getElementById('startBtn').textContent = '▶ スタート';
+function startMicListening() {
+  if (!micStream) return;
+  const a = getAC();
+  const src = a.createMediaStreamSource(micStream);
+  analyserNode = a.createAnalyser();
+  analyserNode.fftSize = 512;
+  src.connect(analyserNode);
+  const buf = new Float32Array(analyserNode.fftSize);
+  let prevRMS = 0;
+  const THRESHOLD = 0.04;
+  const MIN_INTERVAL_MS = 80;
 
-  const PERFECT_EARLY = 80,  PERFECT_LATE = 100;
-  const GOOD_EARLY    = 250, GOOD_LATE    = 200;
-  const pattern = getPattern();
-  const usedTaps = new Set();
-  const results = new Array(pattern.length).fill('m');
-
-  expectedBeats.forEach(b => {
-    let best = null, bestDiff = 999999;
-    tapLog.forEach((t, i) => {
-      if (usedTaps.has(i)) return;
-      const diff = t - b.timeMs;
-      if (diff >= -GOOD_EARLY && diff <= GOOD_LATE) {
-        if (Math.abs(diff) < Math.abs(bestDiff)) { best = i; bestDiff = diff; }
+  micCheckInterval = setInterval(() => {
+    if (sessionPhase !== 'playing') return;
+    analyserNode.getFloatTimeDomainData(buf);
+    let rms = 0;
+    for (const v of buf) rms += v * v;
+    rms = Math.sqrt(rms / buf.length);
+    if (rms > THRESHOLD && rms > prevRMS * 1.5) {
+      const now = performance.now();
+      if (now - lastMicTrigger > MIN_INTERVAL_MS) {
+        lastMicTrigger = now;
+        const tapAC = ac.currentTime;
+        const tapMs = (tapAC - patternStartAC) * 1000;
+        judgeLastTap(tapMs);
+        flashTapBtn();
+        tapMarks.push({ xRatio: Math.max(0, Math.min(1, tapMs / (TOTAL_BEATS * beatInterval * 1000))) });
       }
-    });
-    if (best !== null) {
-      usedTaps.add(best);
-      const diff = tapLog[best] - b.timeMs;
-      if (diff >= -PERFECT_EARLY && diff <= PERFECT_LATE) results[b.idx] = 'p';
-      else if (diff < 0) results[b.idx] = 'e';
-      else results[b.idx] = 'l';
     }
-  });
+    prevRMS = rms;
+  }, 10);
+}
 
-  patternResults = results;
-  drawStaff();
-  renderDots(results);
-
-  const total = expectedBeats.length;
-  const p = results.filter(r => r === 'p').length;
-  const g = results.filter(r => r === 'e' || r === 'l').length;
-  const m = results.filter(r => r === 'm').length;
-  const acc = total > 0 ? Math.round((p * 100 + g * 50) / (total * 100) * 100) : 0;
-  const earned = p * 120 + g * 60 - m * 30;
-  totalScore += Math.max(0, earned);
-
-  const grade = acc >= 95 ? 'S' : acc >= 80 ? 'A' : acc >= 65 ? 'B' : acc >= 50 ? 'C' : 'D';
-  if (acc >= 60) { streak++; xp += Math.max(0, earned); }
-  else { streak = 0; }
-
-  if (acc >= 70 && currentLevel + 1 < LEVELS.length && LEVELS[currentLevel + 1].id > unlockedLevel) {
-    unlockedLevel = LEVELS[currentLevel + 1].id;
-    localStorage.setItem('snare_unlockedLevel', unlockedLevel);
-    renderLevelPills();
+// ═══════════════════════════════════════════════════════
+// RESULT
+// ═══════════════════════════════════════════════════════
+function calcScore() {
+  const nonRests = patternNotes.filter(n => !n.isRest);
+  let p = 0, g = 0, m = 0;
+  for (let i = 0; i < patternNotes.length; i++) {
+    if (patternNotes[i].isRest) continue;
+    const j = judgments[i];
+    if (!j || j.type === 'miss') m++;
+    else if (j.type === 'perfect') p++;
+    else g++;
   }
-  updateWeakBtn();
+  const total = nonRests.length || 1;
+  const accuracy = Math.round(((p + g * 0.5) / total) * 100);
+  const score = Math.round((p * 100 + g * 50) / total * 10);
+  let grade;
+  if (accuracy >= 95) grade = 'S';
+  else if (accuracy >= 80) grade = 'A';
+  else if (accuracy >= 65) grade = 'B';
+  else if (accuracy >= 50) grade = 'C';
+  else grade = 'D';
+  return { p, g, m, accuracy, score, grade };
+}
 
-  updateXP();
-  document.getElementById('scoreVal').textContent = totalScore;
-  document.getElementById('weakModeBanner').style.display = weakPatternMode ? 'block' : 'none';
-  document.getElementById('streakBadge').textContent = streak > 1 ? `🔥${streak}連続` : '';
-  document.getElementById('rP').textContent = p;
-  document.getElementById('rG').textContent = g;
-  document.getElementById('rM').textContent = m;
-  document.getElementById('rAcc').textContent = acc + '%';
+function showResult() {
+  const { p, g, m, accuracy, score, grade } = calcScore();
+  document.getElementById('rPerfect').textContent = p;
+  document.getElementById('rGood').textContent = g;
+  document.getElementById('rMiss').textContent = m;
   const gradeEl = document.getElementById('resultGrade');
   gradeEl.textContent = grade;
   gradeEl.className = 'result-grade grade-' + grade;
-  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('resultScore').textContent = score + ' pts';
+  document.getElementById('resultAccuracy').textContent = `ACCURACY ${accuracy}%`;
 
-  const msgs = { S: '完璧！素晴らしい！', A: 'Great！良い精度です', B: 'Good！もう少し！', C: 'Keep going!', D: 'また練習しよう' };
-  showFeedback(
-    grade === 'S' ? 'PERFECT!' : grade === 'A' ? 'GREAT!' : grade === 'B' ? 'GOOD!' : 'KEEP GOING',
-    grade === 'S' || grade === 'A' ? 'perfect' : grade === 'B' ? 'good' : 'miss',
-    msgs[grade]
-  );
-}
-
-function showFeedback(main, cls, sub) {
-  const el = document.getElementById('feedbackMain');
-  el.textContent = main;
-  el.className = 'feedback-main ' + (cls || 'ready');
-  document.getElementById('feedbackSub').textContent = sub || '';
-}
-
-function renderDots(results) {
-  const row = document.getElementById('dotsRow');
-  row.innerHTML = results.map(r => `<div class="dot ${r || ''}"></div>`).join('');
-}
-
-// ============================================================
-// LISTEN MODE
-// ============================================================
-function listenPattern() {
-  if (sessionPhase === 'playing' || sessionPhase === 'countdown') return;
-  const ac = getACtx();
-  const pattern = getPattern();
-  const lv = LEVELS[currentLevel];
-  const secPerBeat = 60 / bpm;
-  const startT = ac.currentTime + 0.15;
-  const totalDur = pattern.reduce((s, n) => s + (NOTE_DUR[n.t] || 1), 0);
-
-  for (let b = 0; b < Math.ceil(totalDur); b++) {
-    playClick(startT + b * secPerBeat, b % lv.timeSig === 0);
+  // Unlock next level
+  const data = loadLevelData();
+  const best = data[currentLevel] || {};
+  if (accuracy >= 70 && currentLevel < 10) {
+    if (!data[currentLevel + 1]) data[currentLevel + 1] = {};
+    saveLevelData(data);
   }
-  let timeOff = 0;
-  pattern.forEach(note => {
-    if (!NOTE_IS_REST[note.t] && note.t !== 'r') playSnare(startT + timeOff * secPerBeat);
-    timeOff += (NOTE_DUR[note.t] || 1);
-  });
-  showFeedback('LISTEN...', 'ready', 'メトロノームと音を聴いて覚えよう');
-}
-
-// ============================================================
-// PATTERN NAVIGATION
-// ============================================================
-function nextPattern() {
-  clearTapLines();
-  if (weakPatternMode) {
-    weakPatternIndex = (weakPatternIndex + 1) % weakPatterns.length;
-    currentWeakPattern = weakPatterns[weakPatternIndex] ? weakPatterns[weakPatternIndex].pattern : null;
-    updateWeakModeLabel();
-  } else {
-    refreshPattern();
+  if (!best.grade || gradeRank(grade) > gradeRank(best.grade)) {
+    data[currentLevel] = { grade, accuracy };
+    saveLevelData(data);
   }
-  patternResults = [];
-  tapLog = [];
-  document.getElementById('dotsRow').innerHTML = '';
-  document.getElementById('resultCard').style.display = 'none';
-  document.getElementById('weakBtn') && updateWeakBtn();
-  showFeedback('譜面を読んでスタート', 'ready', '');
-  drawStaff();
+
+  showScreen('resultScreen');
 }
 
-function updateWeakModeLabel() {
-  const lbl = document.getElementById('patNumLabel');
-  if (weakPatternMode) {
-    lbl.textContent = `苦手 ${weakPatternIndex+1}/${weakPatterns.length}`;
-  } else {
-    lbl.textContent = 'ランダム';
+function gradeRank(g) { return { S: 5, A: 4, B: 3, C: 2, D: 1 }[g] || 0; }
+
+// ═══════════════════════════════════════════════════════
+// LEVEL SYSTEM
+// ═══════════════════════════════════════════════════════
+function loadLevelData() {
+  try { return JSON.parse(localStorage.getItem('snareSight_levels') || '{"1":{}}'); } catch { return { '1': {} }; }
+}
+function saveLevelData(d) { localStorage.setItem('snareSight_levels', JSON.stringify(d)); }
+
+function renderLevelGrid() {
+  const grid = document.getElementById('levelGrid');
+  const data = loadLevelData();
+  grid.innerHTML = '';
+  const LEVEL_NAMES = ['初級','初中級','中級','中級+','中上級','中上級+','上級','上級+','最上級','達人'];
+  for (let lv = 1; lv <= 10; lv++) {
+    const btn = document.createElement('button');
+    btn.className = 'level-btn';
+    const info = data[lv];
+    const unlocked = !!info || lv === 1;
+    btn.classList.add(unlocked ? 'unlocked' : 'locked');
+    if (info && info.grade === 'S') btn.classList.add('best-s');
+    const stars = info ? (info.accuracy >= 95 ? '★★★' : info.accuracy >= 80 ? '★★☆' : '★☆☆') : '☆☆☆';
+    btn.innerHTML = `
+      <div class="lv-num">${lv}</div>
+      <div class="lv-label">${LEVEL_NAMES[lv-1]}</div>
+      <div class="lv-stars">${stars}</div>
+    `;
+    if (unlocked) {
+      btn.onclick = () => {
+        currentLevel = lv;
+        currentPatternSeed = Date.now();
+        showScreen('playScreen');
+        setupCanvas();
+        document.getElementById('curLvLabel').textContent = lv;
+        patternNotes = generatePattern(lv, currentPatternSeed);
+        judgments = new Array(patternNotes.length).fill(null);
+        tapMarks = [];
+        drawScore(undefined);
+        document.getElementById('startBtn').style.display = '';
+        document.getElementById('tapBtn').disabled = true;
+        updatePhaseDisplay('', '– READY –');
+      };
+    }
+    grid.appendChild(btn);
   }
 }
 
-function updateWeakBtn() {
-  const btn = document.getElementById('weakBtn');
-  if (!btn) return;
-  const key = patternToKey(getPattern());
-  const isWeak = weakPatterns.some(w => w.key === key);
-  btn.textContent = isWeak ? '★ 苦手登録済' : '☆ 苦手に追加';
-  btn.style.borderColor = isWeak ? 'var(--gold)' : 'var(--border)';
-  btn.style.color = isWeak ? 'var(--gold)' : 'var(--muted)';
+// ═══════════════════════════════════════════════════════
+// WEAK PATTERNS
+// ═══════════════════════════════════════════════════════
+function loadWeak() {
+  try { return JSON.parse(localStorage.getItem('snareSight_weak') || '[]'); } catch { return []; }
 }
+function saveWeak(arr) { localStorage.setItem('snareSight_weak', JSON.stringify(arr)); }
 
-function toggleWeak() {
-  const pattern = getPattern();
-  const key = patternToKey(pattern);
-  const idx = weakPatterns.findIndex(w => w.key === key);
-  const lv = LEVELS[currentLevel];
-  if (idx >= 0) {
-    weakPatterns.splice(idx, 1);
-  } else {
-    weakPatterns.push({ key, pattern: JSON.parse(JSON.stringify(pattern)), levelId: lv.id, levelName: lv.name, addedAt: Date.now() });
-  }
-  localStorage.setItem('snare_weakPatterns', JSON.stringify(weakPatterns));
-  updateWeakBtn();
-  renderWeakList();
-}
-
-function enterWeakMode() {
-  if (!weakPatterns.length) { alert('苦手パターンがまだありません'); return; }
-  weakPatternMode = true;
-  weakPatternIndex = 0;
-  currentWeakPattern = weakPatterns[0].pattern;
-  // レベルを合わせる
-  const lvIdx = LEVELS.findIndex(l => l.id === weakPatterns[0].levelId);
-  if (lvIdx >= 0) selectLevel(lvIdx, true);
-  patternResults = [];
-  tapLog = [];
-  document.getElementById('dotsRow').innerHTML = '';
-  document.getElementById('resultCard').style.display = 'none';
-  updateWeakModeLabel();
-  updateWeakBtn();
-  showFeedback('苦手パターン練習', 'ready', '');
-  drawStaff();
-  // 苦手パネルを閉じる
-  document.getElementById('weakPanel').style.display = 'none';
-}
-
-function exitWeakMode() {
-  weakPatternMode = false;
-  currentWeakPattern = null;
-  refreshPattern();
-  patternResults = [];
-  tapLog = [];
-  document.getElementById('dotsRow').innerHTML = '';
-  document.getElementById('resultCard').style.display = 'none';
-  updateWeakModeLabel();
-  updateWeakBtn();
-  showFeedback('譜面を読んでスタート', 'ready', '');
-  drawStaff();
+function registerWeak() {
+  if (!currentPatternSeed) { showToast('パターンがありません'); return; }
+  const list = loadWeak();
+  if (list.find(w => w.seed === currentPatternSeed)) { showToast('すでに登録済みです'); return; }
+  const { accuracy, grade } = calcScore();
+  list.push({ seed: currentPatternSeed, level: currentLevel, grade, accuracy, date: Date.now() });
+  saveWeak(list);
+  showToast('苦手パターンに登録しました');
 }
 
 function renderWeakList() {
-  const list = document.getElementById('weakList');
-  if (!list) return;
-  if (!weakPatterns.length) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px;">苦手パターンはまだありません</div>';
+  const list = loadWeak();
+  const el = document.getElementById('weakList');
+  el.innerHTML = '';
+  if (list.length === 0) {
+    el.innerHTML = '<div style="color:var(--text2);font-size:14px;text-align:center;padding:32px">苦手パターンはまだありません</div>';
     return;
   }
-  list.innerHTML = weakPatterns.map((w, i) => `
-    <div class="weak-item" onclick="previewWeak(${i})">
-      <div class="weak-item-left">
-        <span class="weak-lv-badge">${w.levelName}</span>
-        <span class="weak-notes">${w.key.replace(/,/g,' ')}</span>
+  list.forEach((w, i) => {
+    const item = document.createElement('div');
+    item.className = 'weak-item';
+    const d = new Date(w.date);
+    item.innerHTML = `
+      <div class="weak-item-info">
+        <span>Lv.${w.level} — Grade ${w.grade}</span>
+        ${d.getMonth()+1}/${d.getDate()} &nbsp; 精度 ${w.accuracy}%
       </div>
-      <button class="weak-del" onclick="event.stopPropagation();deleteWeak(${i})">✕</button>
-    </div>
-  `).join('');
-}
-
-function previewWeak(i) {
-  weakPatternMode = true;
-  weakPatternIndex = i;
-  currentWeakPattern = weakPatterns[i].pattern;
-  const lvIdx = LEVELS.findIndex(l => l.id === weakPatterns[i].levelId);
-  if (lvIdx >= 0) selectLevel(lvIdx, true);
-  patternResults = [];
-  tapLog = [];
-  document.getElementById('dotsRow').innerHTML = '';
-  document.getElementById('resultCard').style.display = 'none';
-  updateWeakModeLabel();
-  updateWeakBtn();
-  showFeedback('苦手パターン練習', 'ready', '');
-  drawStaff();
-  document.getElementById('weakPanel').style.display = 'none';
-}
-
-function deleteWeak(i) {
-  weakPatterns.splice(i, 1);
-  localStorage.setItem('snare_weakPatterns', JSON.stringify(weakPatterns));
-  renderWeakList();
-  updateWeakBtn();
-  if (weakPatternMode && weakPatterns.length === 0) exitWeakMode();
-}
-
-// ============================================================
-// LEVEL PILLS
-// ============================================================
-function renderLevelPills() {
-  const wrap = document.getElementById('levelPills');
-  wrap.innerHTML = '';
-  LEVELS.forEach((lv, i) => {
-    const locked = lv.id > unlockedLevel;
-    const pill = document.createElement('div');
-    pill.className = 'level-pill' + (i === currentLevel ? ' active' : '') + (locked ? ' locked' : '');
-    pill.textContent = locked ? `🔒${lv.name}` : lv.name;
-    if (!locked) pill.onclick = () => selectLevel(i);
-    wrap.appendChild(pill);
+      <div style="display:flex;gap:4px">
+        <button class="weak-play-btn">練習</button>
+        <button class="weak-del-btn">×</button>
+      </div>
+    `;
+    item.querySelector('.weak-play-btn').onclick = () => {
+      currentLevel = w.level;
+      currentPatternSeed = w.seed;
+      showScreen('playScreen');
+      setupCanvas();
+      document.getElementById('curLvLabel').textContent = w.level;
+      patternNotes = generatePattern(w.level, w.seed);
+      judgments = new Array(patternNotes.length).fill(null);
+      tapMarks = [];
+      drawScore(undefined);
+      document.getElementById('startBtn').style.display = '';
+      document.getElementById('tapBtn').disabled = true;
+      updatePhaseDisplay('', '– READY –');
+    };
+    item.querySelector('.weak-del-btn').onclick = () => {
+      const l2 = loadWeak();
+      l2.splice(i, 1);
+      saveWeak(l2);
+      renderWeakList();
+    };
+    el.appendChild(item);
   });
 }
 
-function selectLevel(i, keepWeakMode = false) {
-  if (LEVELS[i].id > unlockedLevel) return;
-  currentLevel = i;
-  if (!keepWeakMode) { weakPatternMode = false; currentWeakPattern = null; refreshPattern(); }
-  patternResults = []; tapLog = [];
-  const lv = LEVELS[i];
-  bpm = lv.bpm;
-  document.getElementById('bpmSlider').value = bpm;
-  document.getElementById('bpmNum').textContent = bpm;
-  document.getElementById('bpmChip').textContent = `♩= ${bpm}`;
-  document.getElementById('levelChip').textContent = lv.name;
-  document.getElementById('levelDesc').textContent = lv.desc;
-  document.getElementById('timeSigLabel').textContent = `${lv.timeSig}/4拍子`;
-  document.getElementById('dotsRow').innerHTML = '';
-  document.getElementById('resultCard').style.display = 'none';
-  updateWeakModeLabel();
-  updateWeakBtn && updateWeakBtn();
-  showFeedback('譜面を読んでスタート', 'ready', '');
-  renderLevelPills();
-  drawStaff();
+// ═══════════════════════════════════════════════════════
+// BPM
+// ═══════════════════════════════════════════════════════
+function changeBPM(delta) {
+  bpm = Math.max(40, Math.min(200, bpm + delta));
+  document.getElementById('bpmDisplay').textContent = bpm;
 }
 
-function updateXP() {
-  const maxXP = LEVELS[currentLevel].id * 500;
-  document.getElementById('xpFill').style.width = Math.min(100, xp / maxXP * 100) + '%';
+// ═══════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════
+function updatePhaseDisplay(cls, text) {
+  const el = document.getElementById('phaseDisplay');
+  el.className = 'phase-display' + (cls ? ' ' + cls : '');
+  el.textContent = text;
 }
 
-// ============================================================
+function updateBeatDots(activeBeat) {
+  const dots = document.querySelectorAll('.beat-dot');
+  dots.forEach((d, i) => d.classList.toggle('active', i === activeBeat));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ═══════════════════════════════════════════════════════
 // INIT
-// ============================================================
-function toggleWeakPanel() {
-  const panel = document.getElementById('weakPanel');
-  const isOpen = panel.style.display !== 'none';
-  panel.style.display = isOpen ? 'none' : 'block';
-  if (!isOpen) renderWeakList();
-}
-
+// ═══════════════════════════════════════════════════════
 window.addEventListener('load', () => {
-  renderLevelPills();
-  refreshPattern();
-  drawStaff();
-  updateWeakBtn();
-  renderWeakList();
-  updateWeakModeLabel();
+  renderLevelGrid();
+  setupCanvas();
+  window.addEventListener('resize', () => {
+    if (document.getElementById('playScreen').classList.contains('active')) {
+      setupCanvas();
+      if (patternNotes.length) drawScore(undefined);
+    }
+  });
 });
-
-// デバッグ用: localStorage リセット（コンソールから呼べる）
-function resetProgress() {
-  localStorage.removeItem('snare_unlockedLevel');
-  unlockedLevel = 1;
-  renderLevelPills();
-}
-
-window.addEventListener('resize', () => { drawStaff(); });
 </script>
 </body>
 </html>
