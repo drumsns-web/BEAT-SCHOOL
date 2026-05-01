@@ -217,14 +217,12 @@
     letter-spacing: 0.15em;
   }
 
-  /* Score canvas */
-  #scoreCanvas {
+  /* Score wrap */
+  #scoreWrap {
     display: block;
     width: 100%;
     max-width: 600px;
     touch-action: none;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
   }
 
   /* Phase indicator */
@@ -854,21 +852,22 @@ function renderVexFlow() {
   const vfCtx = renderer.getContext();
 
   // ── Stave layout ──
+  // パーカッション一線譜: num_lines:1 で一線譜、clef:'percussion' で||記号
   const MARGIN  = 8;
-  const STAVE_Y = 28;
+  const STAVE_Y = 40;  // 一線譜は高さが小さいので少し下げる
   const totalW  = scoreW - MARGIN * 2;
-  const m1W     = Math.floor(totalW * 0.53); // wider for clef+timesig
+  const m1W     = Math.floor(totalW * 0.53);
   const m2W     = totalW - m1W;
 
-  const stave1 = new Stave(MARGIN, STAVE_Y, m1W);
+  const stave1 = new Stave(MARGIN, STAVE_Y, m1W, { num_lines: 1 });
   stave1.addClef('percussion').addTimeSignature('4/4');
   stave1.setContext(vfCtx).draw();
 
-  const stave2 = new Stave(MARGIN + m1W, STAVE_Y, m2W);
+  const stave2 = new Stave(MARGIN + m1W, STAVE_Y, m2W, { num_lines: 1 });
   stave2.setEndBarType(Barline.type.END);
   stave2.setContext(vfCtx).draw();
 
-  // ── Build StaveNotes ──
+  // ── Build StaveNotes (一線譜: key は b/4 = 中央線上、stem_direction: 1 = 上向き) ──
   const m1notes = patternNotes.filter(n => n.gridStart <  GRID_MEASURE);
   const m2notes = patternNotes.filter(n => n.gridStart >= GRID_MEASURE);
 
@@ -878,7 +877,7 @@ function renderVexFlow() {
       const sn = new StaveNote({
         keys: ['b/4'],
         duration: n.isRest ? dur + 'r' : dur,
-        stem_direction: 1,
+        stem_direction: 1,  // 1 = UP
       });
       return { sn, nd: n };
     });
@@ -1038,9 +1037,13 @@ function gridToX(gridPos) {
 function startSession() {
   getAC();
   stopSession();
-  const seed = currentPatternSeed || Date.now();
-  currentPatternSeed = seed;
-  patternNotes = generatePattern(currentLevel, seed);
+  // patternNotes は呼び出し元（levelボタン / replaySession / newPattern）で既にセット済み
+  // ここでは再生成しない（同じ譜面でSTARTを押した場合もそのまま使う）
+  if (!currentPatternSeed) currentPatternSeed = Date.now() + Math.floor(Math.random() * 999999);
+  if (!patternNotes.length) {
+    patternNotes = generatePattern(currentLevel, currentPatternSeed);
+    renderVexFlow();
+  }
   taps = [];
   judgments = new Array(patternNotes.length).fill(null);
   tapMarks = [];
@@ -1118,19 +1121,19 @@ function endSession() {
       judgments[i] = { type: 'miss', delta: 999 };
     }
   }
+  // 判定カラーを適用してカーソルを消す
   applyJudgmentColors();
   drawCursorOverlay(null);
-  showResult();
+  // 1秒間譜面を見せてからリザルト画面へ
+  setTimeout(() => showResult(), 1000);
 }
 
 function replaySession() {
-  // Same pattern, replay
   showScreen('playScreen');
   patternNotes = generatePattern(currentLevel, currentPatternSeed);
   judgments = new Array(patternNotes.length).fill(null);
   tapMarks = [];
-  setupCanvas();
-  drawScore(undefined);
+  renderVexFlow();
   document.getElementById('startBtn').style.display = '';
   document.getElementById('tapBtn').disabled = true;
   updatePhaseDisplay('', '– READY –');
@@ -1138,15 +1141,14 @@ function replaySession() {
 }
 
 function newPattern() {
-  // Fresh random pattern
-  currentPatternSeed = Date.now();
+  // 必ず新しいシードで新しい譜面を生成
+  currentPatternSeed = Date.now() + Math.floor(Math.random() * 999999);
   showScreen('playScreen');
-  setupCanvas();
   document.getElementById('curLvLabel').textContent = currentLevel;
   patternNotes = generatePattern(currentLevel, currentPatternSeed);
   judgments = new Array(patternNotes.length).fill(null);
   tapMarks = [];
-  drawScore(undefined);
+  renderVexFlow();
   document.getElementById('startBtn').style.display = '';
   document.getElementById('tapBtn').disabled = true;
   updatePhaseDisplay('', '– READY –');
@@ -1371,14 +1373,13 @@ function renderLevelGrid() {
     if (unlocked) {
       btn.onclick = () => {
         currentLevel = lv;
-        currentPatternSeed = Date.now();
+        currentPatternSeed = Date.now() + Math.floor(Math.random() * 999999);
         showScreen('playScreen');
-        setupCanvas();
         document.getElementById('curLvLabel').textContent = lv;
         patternNotes = generatePattern(lv, currentPatternSeed);
         judgments = new Array(patternNotes.length).fill(null);
         tapMarks = [];
-        drawScore(undefined);
+        renderVexFlow();
         document.getElementById('startBtn').style.display = '';
         document.getElementById('tapBtn').disabled = true;
         updatePhaseDisplay('', '– READY –');
