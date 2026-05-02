@@ -840,7 +840,7 @@ function renderVexFlow() {
 
   const wrap = document.getElementById('scoreWrap');
   scoreW = wrap.offsetWidth || window.innerWidth;
-  scoreH = 120; // STAVE_Y=100、線より下に少し余白
+  scoreH = 180;
 
   scoreDiv.innerHTML = '';
   scoreDiv.style.width  = scoreW + 'px';
@@ -852,15 +852,20 @@ function renderVexFlow() {
   const vfCtx = renderer.getContext();
 
   // ── Stave layout: 1-line percussion stave ──
-  // STAVE_Y: スタッフラインのY座標。符頭はf/4(line 1.5)でラインの上に来る
-  // scoreH=160, STAVE_Y=100 → 線がほぼ中央下、符頭・ビームが上に収まる
+  // spaceAboveStaffLn:0 にすることで STAVE_Y = 線の実際のY座標になる
+  // 符頭 f/4(line 1.5), spacing=20 → 線より30px上
+  // STAVE_Y=130 → 符頭y=100, ビームy≈60, 連符y≈40 → scoreH=180内に全部収まる
   const MARGIN  = 8;
-  const STAVE_Y = 100;
+  const STAVE_Y = 130;
   const totalW  = scoreW - MARGIN * 2;
   const m1W     = Math.floor(totalW * 0.53);
   const m2W     = totalW - m1W;
 
-  const staveOpts = { spacingBetweenLinesPx: 20 };
+  const staveOpts = {
+    spacingBetweenLinesPx: 20,
+    spaceAboveStaffLn: 0,
+    spaceBelowStaffLn: 0,
+  };
 
   const stave1 = new Stave(MARGIN, STAVE_Y, m1W, staveOpts);
   stave1.setNumLines(1);
