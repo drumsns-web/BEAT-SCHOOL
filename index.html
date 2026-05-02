@@ -841,17 +841,16 @@ function renderVexFlow() {
   const wrap = document.getElementById('scoreWrap');
   scoreW = wrap.offsetWidth || window.innerWidth;
 
-  // ── レイアウト設計 ──
-  // canvasを十分大きく取り、線を上寄りに配置する
-  // VexFlowのデフォルト: spaceAboveStaffLn=4, spacing=10
-  // → 実際の線Y = STAVE_Y + 4*10 = STAVE_Y + 40
-  // STAVE_Y=10 → 線Y=50, 符頭(f/4,line1.5)Y=35, ビームY≈0
-  // → ビームが切れる可能性あり
-  //
-  // spacing=10(デフォルト)のまま使い、STAVE_Yを調整:
-  // STAVE_Y=30 → 線Y=30+40=70, 符頭Y=70-15=55, ビームY≈20, 連符Y≈5
-  // scoreH=100 → 線70, 下余白30px → OK
-  scoreH = 240;
+  // Node.jsで実測済みの値:
+  // STAVE_Y=50, spacing=20 → 線Y=130, 符頭(b/4)Y=70, ビームY=30, bottomY=230
+  const MARGIN     = 8;
+  const STAVE_Y    = 50;
+  const totalW     = scoreW - MARGIN * 2;
+  const m1W        = Math.floor(totalW * 0.53);
+  const m2W        = totalW - m1W;
+  const staveOpts  = { spacingBetweenLinesPx: 20 };
+
+  scoreH = 240; // bottomY(230) + 余白10
 
   scoreDiv.innerHTML = '';
   scoreDiv.style.width  = scoreW + 'px';
@@ -861,51 +860,16 @@ function renderVexFlow() {
   renderer.resize(scoreW, scoreH);
   const vfCtx = renderer.getContext();
 
-  // ── 2パス方式: まずStaveを作って正確なY座標を取得、それからrender ──
-  const MARGIN  = 8;
-  const STAVE_Y = 10;  // 仮のY（あとで使わない）
-  const totalW  = scoreW - MARGIN * 2;
-  const m1W     = Math.floor(totalW * 0.53);
-  const m2W     = totalW - m1W;
-  const staveOpts = { spacingBetweenLinesPx: 20 };
-
-  // Staveを一度作って実際のlineYとbottomYを取得
-  const staveProbe = new Stave(MARGIN, STAVE_Y, m1W, staveOpts);
-  staveProbe.setNumLines(1);
-  const lineY   = staveProbe.getYForLine(0);  // 実際の線のY座標
-  const bottomY = staveProbe.getBottomY();
-
-  // 音符を線より上に置きたい距離: spacing*lineNum
-  // b/4 = lineNum 3, spacing=20 → 線より60px上
-  // ビーム = 60+35=95px上 → lineY - 95
-  // 連符 = さらに15px上 → lineY - 110
-  // → 上端 = lineY - 110 が 0以上になるよう STAVE_Y を決める
-  // lineY = STAVE_Y + 4*20 = STAVE_Y + 80
-  // lineY - 110 >= 10(余白) → STAVE_Y + 80 - 110 >= 10 → STAVE_Y >= 40
-  const finalStaveY = 50;
-  const finalLineY  = finalStaveY + 4 * 20; // = 130
-  scoreH = finalLineY + 4 * 20 + 10;        // bottomY(230) + 余白10 = 240
-
-  scoreDiv.innerHTML = '';
-  scoreDiv.style.width  = scoreW + 'px';
-  scoreDiv.style.height = scoreH + 'px';
-
-  const renderer = new Renderer(scoreDiv, Renderer.Backends.SVG);
-  renderer.resize(scoreW, scoreH);
-  const vfCtx = renderer.getContext();
-
-  const stave1 = new Stave(MARGIN, finalStaveY, m1W, staveOpts);
+  const stave1 = new Stave(MARGIN, STAVE_Y, m1W, staveOpts);
   stave1.setNumLines(1);
   stave1.addClef('percussion').addTimeSignature('4/4');
   stave1.setContext(vfCtx).draw();
 
-  const stave2 = new Stave(MARGIN + m1W, finalStaveY, m2W, staveOpts);
+  const stave2 = new Stave(MARGIN + m1W, STAVE_Y, m2W, staveOpts);
   stave2.setNumLines(1);
   stave2.setEndBarType(Barline.type.END);
   stave2.setContext(vfCtx).draw();
 
-  // b/4: lineNum=3, spacing=20 → noteY = finalLineY - 60 = 70
-  // 線(130)より60px上 ✓  ビーム = 70-40=30 ✓  連符 = 30-15=15 ✓
   const m1notes = patternNotes.filter(n => n.gridStart <  GRID_MEASURE);
   const m2notes = patternNotes.filter(n => n.gridStart >= GRID_MEASURE);
 
