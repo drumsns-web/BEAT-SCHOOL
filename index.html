@@ -879,7 +879,8 @@ function renderVexFlow() {
       const sn = new StaveNote({
         keys: ['b/4'],
         duration: n.isRest ? dur + 'r' : dur,
-        stem_direction: 1,
+        stem_direction: 1,  // 強制上向き
+        auto_stem: false,   // 自動反転を無効化
       });
       return { sn, nd: n };
     });
@@ -894,7 +895,7 @@ function renderVexFlow() {
     const voice = new Voice({ num_beats: 4, beat_value: 4 }).setStrict(false);
     voice.addTickables(pairs.map(p => p.sn));
 
-    // Beams: group per quarter-note beat, stem up
+    // Beams: 1拍単位、符尾上向き強制
     const beams = Beam.generateBeams(pairs.map(p => p.sn), {
       groups: [new Fraction(1, 4)],
       stem_direction: 1,
