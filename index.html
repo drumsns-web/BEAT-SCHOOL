@@ -840,7 +840,7 @@ function renderVexFlow() {
 
   const wrap = document.getElementById('scoreWrap');
   scoreW = wrap.offsetWidth || window.innerWidth;
-  scoreH = 130;  // 1線譜は高さが少なくて済む（ビーム+連符ブラケット込み）
+  scoreH = 160;
 
   scoreDiv.innerHTML = '';
   scoreDiv.style.width  = scoreW + 'px';
@@ -852,26 +852,29 @@ function renderVexFlow() {
   const vfCtx = renderer.getContext();
 
   // ── Stave layout: 1-line percussion stave ──
-  // setNumLines(1) で1本線のパーカッション譜
-  // note key = 'c/4' → lineNumber=0 = その1本線上に配置
+  // setNumLines(1) で1本線
+  // spacingBetweenLinesPx:20 でスペース確保
+  // note key = 'f/4' → line 1.5 → 線の真上のスペースに符頭が来る（加線なし）
   const MARGIN  = 8;
-  const STAVE_Y = 25;
+  const STAVE_Y = 60;  // 符頭が線の上に来るので上部余白を多めに
   const totalW  = scoreW - MARGIN * 2;
   const m1W     = Math.floor(totalW * 0.53);
   const m2W     = totalW - m1W;
 
-  const stave1 = new Stave(MARGIN, STAVE_Y, m1W);
+  const staveOpts = { spacingBetweenLinesPx: 20 };
+
+  const stave1 = new Stave(MARGIN, STAVE_Y, m1W, staveOpts);
   stave1.setNumLines(1);
   stave1.addClef('percussion').addTimeSignature('4/4');
   stave1.setContext(vfCtx).draw();
 
-  const stave2 = new Stave(MARGIN + m1W, STAVE_Y, m2W);
+  const stave2 = new Stave(MARGIN + m1W, STAVE_Y, m2W, staveOpts);
   stave2.setNumLines(1);
   stave2.setEndBarType(Barline.type.END);
   stave2.setContext(vfCtx).draw();
 
   // ── Build StaveNotes ──
-  // key: 'c/4' → line 0 (= 1線譜の線上)
+  // key: 'f/4' → line 1.5 → 線より上のスペースに符頭（加線なし）
   // stem_direction: 1 = 上向き
   const m1notes = patternNotes.filter(n => n.gridStart <  GRID_MEASURE);
   const m2notes = patternNotes.filter(n => n.gridStart >= GRID_MEASURE);
@@ -880,7 +883,7 @@ function renderVexFlow() {
     return noteList.map(n => {
       const dur = gridDurToVF(n.gridDur, !!n.tuplet);
       const sn = new StaveNote({
-        keys: ['d/4'],
+        keys: ['f/4'],
         duration: n.isRest ? dur + 'r' : dur,
         stem_direction: 1,  // 上向き
       });
