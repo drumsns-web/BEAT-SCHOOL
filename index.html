@@ -880,7 +880,7 @@ function renderVexFlow() {
     return noteList.map(n => {
       const dur = gridDurToVF(n.gridDur, !!n.tuplet);
       const sn = new StaveNote({
-        keys: ['c/4'],
+        keys: ['d/4'],
         duration: n.isRest ? dur + 'r' : dur,
         stem_direction: 1,  // 上向き
       });
